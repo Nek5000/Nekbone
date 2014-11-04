@@ -1,0 +1,15 @@
+C
+C     Input parameters from preprocessors.
+C
+C     Note that in parallel implementations, we distinguish between
+C     distributed data (LELT) and uniformly distributed data.
+C
+
+      common /cflops/ flop_a,flop_cg,mflops
+      real mflops
+
+      common /timer/ etimes, ttime, ttotal
+      real etimes,ttime, ttotal
+ 
+      common /lmgrid/ ifmgrid
+      logical ifmgrid
