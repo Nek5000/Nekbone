@@ -1,7 +1,5 @@
-nekbone
+Nekbone
 =======
-
-NEK5000 emulation software called NEKbone
 
 Nekbone captures the basic structure and user interface of the ex-
 tensive Nek5000 software. Nek5000 is a high order, incompressible
@@ -19,13 +17,3 @@ on a block or linear geometry (parameters are set within the test
 directory of the simulation). Nekbone exposes the principal compu-
 tational kernel to reveal the essential elements of the algorithmic-
 architectural coupling that is pertinent to Nek5000.
-
-More information about nekbone can be found on the CESAR web-
-site: https://cesar.mcs.anl.gov/content/software/thermal hydraulics
-or by contacting one of the developers.
-Paul Fischer : fischer@mcs.anl.gov
-Katherine Heisey: heisey@mcs.anl.gov
-This document contains the quick start guide, an overview of the
-more detailed parameters available to the user, a more detailed basis
-of the representation of nekbone and Nek5000, and an overview of
-the provided examples
