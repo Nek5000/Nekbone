@@ -3,7 +3,7 @@ BINNAME=nekbone
 CASENAME:=
 CASEDIR:=$(HOME)/repos/Nekbone/test/nek_cuf16
 S:=$(HOME)/repos/Nekbone/src
-J:=$S/jl
+J:=$S/jl_acc_nekbone
 OPT_INCDIR:=./
 OBJDIR=obj
 IFMPI:=true
@@ -12,7 +12,7 @@ IFNEKDLAY:=
 IFMGRID:=
 F77:=mpif90 -fpic
 CC:=mpicc -fpic 
-P:=-r8 -Mpreprocess
+P:=-r8 -Mpreprocess -acc -Minfo=accel 
 PPPO=
 PPS= PTRSIZE8 MPI LONGINT8 UNDERSCORE GLOBAL_LONG_LONG
 G:=
