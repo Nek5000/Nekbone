@@ -1,16 +1,46 @@
 c-----------------------------------------------------------------------
       program nekbone
+
+c#if 0 
+c      use cudafor
+c#endif
       
       include 'SIZE'
       include 'TOTAL'
       include 'SEMHAT'
       include 'mpif.h'
 
+#if 0
+      interface
+      attributes(global) subroutine ax_cuf1(w,u,ur,us,ut,
+     &                gxyz1,gxyz2,gxyz3,gxyz4,gxyz5,gxyz6,dxm1,dxtm1)
+
+      real, intent(out) :: w(lx1,ly1,lz1,lelt)
+      real, intent(in)  :: u(lx1,ly1,lz1,lelt)
+      real ur  (lx1,ly1,lz1,lelt)
+      real us  (lx1,ly1,lz1,lelt)
+      real ut  (lx1,ly1,lz1,lelt)
+
+      real gxyz1(lx1,ly1,lz1,lelt)
+      real gxyz2(lx1,ly1,lz1,lelt)
+      real gxyz3(lx1,ly1,lz1,lelt)
+      real gxyz4(lx1,ly1,lz1,lelt)
+      real gxyz5(lx1,ly1,lz1,lelt)
+      real gxyz6(lx1,ly1,lz1,lelt)
+
+      real, intent(in) :: dxm1(lx1,lx1)
+      real, intent(in) :: dxtm1(lx1,lx1)
+      end subroutine
+      end interface
+#endif
+
       common /mymask/cmask(-1:lx1*ly1*lz1*lelt)
       parameter (lxyz = lx1*ly1*lz1)
       parameter (lt=lxyz*lelt)
 
-      real x(lt),f(lt),r(lt),w(lt),p(lt),z(lt),c(lt)
+      real x(lt),f(lt),r(lt),w(lt),z(lt),c(lt)
+      real p(lx1,ly1,lz1,lelt)
+
       real g(6,lt)
       real mfloplist(1024), avmflop
       integer icount  
@@ -21,6 +51,17 @@ c-----------------------------------------------------------------------
       integer npx,npy,npz      ! processor decomp
       integer mx ,my ,mz       ! element decomp
 
+#ifdef _OPENACC
+      include 'ACCNEK'
+      common /TEMP0_ACC/ ur(lx1,lx1,lx1,lelt)
+     $     ,             us(lx1,lx1,lx1,lelt)
+     $     ,             ut(lx1,lx1,lx1,lelt)
+     $     ,             wk(lx1,lx1,lx1,lelt)
+      real ur,us,ut,wk
+
+      common /nsmpi_acc/ ug(lt)
+      real ug
+#endif 
 
       call iniproc(mpi_comm_world)    ! has nekmpi common block
       call init_delay
@@ -35,6 +76,58 @@ c     call platform_timer(iverbose)   ! iverbose=0 or 1
       icount = 0
 
 c     SET UP and RUN NEKBONE
+
+#ifdef _OPENACC
+
+!$ACC  DATA CREATE(x,f,r,w,p,z,c)
+!$ACC&      CREATE(ur,us,ut,wk,ug)
+!$ACC&      CREATE(g,dxm1,dxtm1,cmask)
+!$ACC&      CREATE(ids_lgl1,ids_lgl2,ids_ptr)
+      do nx1=nx0,nxN,nxD
+         call init_dim
+         do nelt=iel0,ielN,ielD
+           call init_mesh(ifbrick,cmask,npx,npy,npz,mx,my,mz)
+#ifdef GPUDIRECT
+           call proxy_setupds     (gsh,nx1) ! Has nekmpi common block
+#else
+           call proxy_setupds_acc     (gsh,nx1) ! Has nekmpi common block
+!$ACC UPDATE DEVICE(ids_lgl1,ids_lgl2,ids_ptr)
+#endif
+
+           call set_multiplicity   (c)       ! Inverse of counting matrix
+
+           call proxy_setup(ah,bh,ch,dh,zh,wh,g) 
+           call h1mg_setup
+!$ACC UPDATE DEVICE(g,dxm1,dxtm1)
+           niter = 100
+           n     = nx1*ny1*nz1*nelt
+
+           call set_f(f,c,n)
+!!!$ACC UPDATE HOST(f)
+
+c           write(*,*) "ffffffffffffffff "
+c           write(*,*) f
+c           stop
+
+           if(nid.eq.0) write(6,*)
+
+           call cg_acc(x,f,g,c,r,w,p,z,n,niter,flop_cg)
+
+           call nekgsync()
+
+           call set_timer_flop_cnt(0)
+           call cg_acc(x,f,g,c,r,w,p,z,n,niter,flop_cg)
+           call set_timer_flop_cnt(1)
+
+           call gs_free(gsh)
+           
+           icount = icount + 1
+           mfloplist(icount) = mflops*np
+         enddo
+      enddo
+!$ACC END DATA
+
+#else 
       do nx1=nx0,nxN,nxD
          call init_dim
          do nelt=iel0,ielN,ielD
@@ -65,7 +158,7 @@ c     SET UP and RUN NEKBONE
            mfloplist(icount) = mflops*np
          enddo
       enddo
-
+#endif
       avmflop = 0.0
       do i = 1,icount
          avmflop = avmflop+mfloplist(i)
@@ -94,7 +187,15 @@ c--------------------------------------------------------------
          f(i) = sin(arg)
       enddo
 
+#ifdef GPUDIRECT
+!$acc update device(f)
+#endif
+
       call dssum(f)
+
+#ifdef GPUDIRECT
+!$acc update host(f)
+#endif
       call col2 (f,c,n)
 
       return
@@ -270,18 +371,30 @@ c-----------------------------------------------------------------------
 
       return
       end
+
 c-----------------------------------------------------------------------
       subroutine set_multiplicity (c)       ! Inverse of counting matrix
       include 'SIZE'
       include 'TOTAL'
 
-      real c(1)
+!      real c(1)
+      
+      real c(lx1*ly1*lz1*lelt)
 
       n = nx1*ny1*nz1*nelt
 
       call rone(c,n)
       call adelay
+
+#ifdef GPUDIRECT
+!$ACC UPDATE DEVICE(C)
+#endif
+
       call gs_op(gsh,c,1,1,0)  ! Gather-scatter operation  ! w   = QQ  w
+
+#ifdef GPUDIRECT
+!$ACC UPDATE HOST(C)
+#endif
 
       do i=1,n
          c(i) = 1./c(i)
@@ -289,6 +402,7 @@ c-----------------------------------------------------------------------
 
       return
       end
+
 c-----------------------------------------------------------------------
       subroutine set_timer_flop_cnt(iset)
       include 'SIZE'
@@ -483,3 +597,53 @@ c----------------------------------------------------------------------
       return
       end
 c-----------------------------------------------------------------------
+
+#ifdef _OPENACC
+
+c-----------------------------------------------------------------------
+      subroutine set_multiplicity_acc (c)       ! Inverse of counting matrix
+      include 'SIZE'
+      include 'TOTAL'
+      include 'ACCNEK'
+
+      real c(lx1*ly1*lz1*lelt)
+
+      n = nx1*ny1*nz1*nelt
+
+!$ACC DATA PRESENT(c)
+      call rone_acc(c,n)
+      call adelay
+c      call gs_op(gsh,c,1,1,0)  ! Gather-scatter operation  ! w   = QQ  w
+      call dssum_acc(c)   ! Gather-scatter operation  ! w   = QQ  w
+
+!$ACC PARALLEL LOOP
+      do i=1,n
+         c(i) = 1./c(i)
+      enddo
+
+!$ACC END DATA
+
+      return
+      end
+
+c--------------------------------------------------------------
+      subroutine set_f_acc(f,c,n)
+      real f(n),c(n)
+
+!$ACC DATA PRESENT(f,c)
+!$ACC PARALLEL LOOP
+      do i=1,n
+         arg  = 1.e9*(i*i)
+         arg  = 1.e9*cos(arg)
+         f(i) = sin(arg)
+      enddo
+      call dssum_acc(f)
+
+      call col2_acc (f,c,n)
+
+!$ACC END DATA
+
+      return
+      end
+
+#endif

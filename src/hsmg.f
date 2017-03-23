@@ -857,7 +857,10 @@ c----------------------------------------------------------------------
       integer mask(1)        ! Pointer to Dirichlet BCs
       integer nx,ny,nz,l
       real w(nx,ny,nz,nel)
-      real cmask(-1:lx1*ly1*lz1*lelt)
+
+c     changed by Jing
+      common /mymask/cmask(-1:lx1*ly1*lz1*lelt)
+      real cmask
       
       integer e,count,ptr
 

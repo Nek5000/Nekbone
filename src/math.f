@@ -1383,3 +1383,133 @@ c-----------------------------------------------------------------------
       END
 c-----------------------------------------------------------------------
 
+#ifdef _OPENACC
+c-----------------------------------------------------------------------
+      subroutine rzero_acc(a,n)
+      DIMENSION  A(n)
+
+!$ACC DATA PRESENT(A(1:n))
+!$ACC PARALLEL LOOP
+      DO 100 I = 1, N
+ 100     A(I ) = 0.0
+!$ACC END PARALLEL LOOP
+!$ACC END DATA
+
+      return
+      END
+
+c-----------------------------------------------------------------------
+      subroutine rone_acc(a,n)
+      DIMENSION  A(n)
+
+!$ACC DATA PRESENT(A(1:n))
+!$ACC PARALLEL LOOP
+      DO 100 I = 1, N
+ 100     A(I ) = 1.0
+!$ACC END PARALLEL LOOP
+!$ACC END DATA
+
+      return
+      END
+
+c-----------------------------------------------------------------------
+      subroutine copy_acc(a,b,n)
+      real a(n),b(n)
+
+!$ACC DATA PRESENT(a(1:n),b(1:n))
+!$ACC PARALLEL LOOP
+      do i=1,n
+         a(i)=b(i)
+      enddo
+!$ACC END PARALLEL LOOP
+!$ACC END DATA
+
+      return
+      end
+
+C----------------------------------------------------------------------------
+      function glsc3_acc(a,b,mult,n)
+C
+C     Perform inner-product in double precision
+C
+      real a(n),b(n),mult(n)
+      real tmp,work(1)
+ 
+      tmp = 0.0
+!$ACC DATA PRESENT(a(1:n),b(1:n),mult(1:n))
+!$ACC PARALLEL LOOP REDUCTION(+:tmp)
+      do 10 i=1,n
+         tmp = tmp + a(i)*b(i)*mult(i)
+ 10   continue
+!$ACC END PARALLEL LOOP
+!$ACC END DATA
+      call gop(tmp,work,'+  ',1)
+      glsc3_acc = tmp
+      return
+      end
+
+c-----------------------------------------------------------------------
+      subroutine add2s1_acc(a,b,c1,n)
+      real a(n),b(n)
+
+!$ACC DATA PRESENT(a(1:n),b(1:n))
+!$ACC PARALLEL LOOP 
+      DO 100 I=1,N
+        A(I)=C1*A(I)+B(I)
+ 100  CONTINUE
+!$ACC END PARALLEL LOOP
+!$ACC END DATA
+      return
+      END
+
+c-----------------------------------------------------------------------
+      subroutine add2s2_acc(a,b,c1,n)
+      real a(n),b(n)
+
+!$ACC DATA PRESENT(a(1:n),b(1:n))
+!$ACC PARALLEL LOOP  
+      DO 100 I=1,N
+        A(I)=A(I)+C1*B(I)
+ 100  CONTINUE
+!$ACC END PARALLEL LOOP
+!$ACC END DATA
+ 
+      return
+      END
+
+c-----------------------------------------------------------------------
+      real function vlsum_acc(vec,n)
+      REAL VEC(n)
+ 
+      SUM = 0.
+
+!$ACC DATA PRESENT(VEC(1:n)) 
+!$ACC PARALLEL LOOP REDUCTION(+:SUM)
+      DO 100 I=1,N
+         SUM=SUM+VEC(I)
+ 100  CONTINUE
+!$ACC END PARALLEL LOOP
+!$ACC END DATA
+
+      VLSUM_ACC = SUM
+      return
+      END
+
+c-----------------------------------------------------------------------
+      subroutine col2_acc(a,b,n)
+      real a(n),b(n)
+
+!xbm* unroll (10)
+
+!$ACC DATA PRESENT(a,b)
+
+!$ACC PARALLEL LOOP
+      do i=1,n
+         a(i)=a(i)*b(i)
+      enddo
+!$ACC END PARALLEL LOOP
+!$ACC END DATA
+      return
+      end
+
+#endif

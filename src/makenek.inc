@@ -165,6 +165,7 @@ case $F77comp in
                F77="${F77} -qsuppress=cmpmsg"
                ;;
   *ftn*)        P="-r8 -Mpreprocess"
+#    *ftn*)      P="-ra -s real64 -eZ -em -Rc"
                ;;
   *sunf*)       P="-r8const -xtypemap=real:64 -fpp"
                ;;
@@ -175,11 +176,31 @@ case $F77comp in
       echo "        - don't know how to invoke the C pre-processor (CPP) before compilation"
       echo "       Please edit the makefile and specify the requested compiler flags using the P variable."
       echo ""
+
       P="<specify your compiler flags here>"
       NOCOMPILE=1
       read;;
 esac
 export PPPO
+
+# OpenACC
+if [ "$IFPGIACC" == "true" -o "$IFCRAYACC" == "true" ]; then
+  if [ "$IFPGIACC" == "true" ]; then
+     #PGI compiler
+     PPLIST="${PPLIST} PGI_ACC "
+     P="${P} -acc -Minfo=accel"
+     USR_LFLAGS="${USR_LFLAGS} -ta=nvidia"
+  else
+     # Cray compiler
+     PPLIST="${PPLIST} CRAY_ACC"
+     P="${P} -hacc "
+  fi
+else
+  # default
+  IFPGIACC=false
+  IFCRAYACC=false
+fi
+
 
 # set preprocessor symbols
 if [ "$IFMPI" == "false" -o "$IFMPI" == "no" ]; then

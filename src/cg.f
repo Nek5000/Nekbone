@@ -46,7 +46,7 @@ c     set machine tolerances
       miter = niter
 c     call tester(z,r,n)  
       do iter=1,miter
-         call solveM(z,r,n)    ! preconditioner here
+         call solveM(z,r,n) ! preconditioner here
 
          rtz2=rtz1                                                       ! OPS
          rtz1=glsc3(r,c,z,n)   ! parallel weighted inner product r^T C z ! 3n
@@ -62,13 +62,15 @@ c     call tester(z,r,n)
          alphm=-alpha
          call add2s2(x,p,alpha,n)                                        ! 2n
          call add2s2(r,w,alphm,n)                                        ! 2n
-
          rtr = glsc3(r,c,r,n)                                            ! 3n
          if (iter.eq.1) rlim2 = rtr*eps**2
          if (iter.eq.1) rtr0  = rtr
          rnorm = sqrt(rtr)
 c        if (nid.eq.0.and.mod(iter,100).eq.0) 
-c    $      write(6,6) iter,rnorm,alpha,beta,pap
+c     $        write(6,6) iter,rnorm,alpha,beta,pap
+        if (nid.eq.0.) 
+     $        write(6,6) iter,rnorm,alpha,beta,pap
+
     6    format('cg:',i4,1p4e12.4)
 c        if (rtr.le.rlim2) goto 1001
 
@@ -99,7 +101,7 @@ c-----------------------------------------------------------------------
       include 'TOTAL'
 
       real w(nx1*ny1*nz1,nelt),u(nx1*ny1*nz1,nelt)
-      real gxyz(2*ldim,nx1*ny1*nz1,nelt)
+      real gxyz(nx1*ny1*nz1,2*ldim,nelt)
 
       parameter (lt=lx1*ly1*lz1*lelt)
       real ur(lt),us(lt),ut(lt),wk(lt)
@@ -107,14 +109,13 @@ c-----------------------------------------------------------------------
 
       integer e
 
-
       do e=1,nelt                                ! ~
          call ax_e( w(1,e),u(1,e),gxyz(1,1,e)    ! w   = A  u
      $                             ,ur,us,ut,wk) !  L     L  L
       enddo                                      ! 
 
       call dssum(w)         ! Gather-scatter operation  ! w   = QQ  w
-                                                           !            L
+                                                        !            L
       call add2s2(w,u,.1,n)   !2n
       call maskit(w,cmask,nx1,ny1,nz1)  ! Zero out Dirichlet conditions
 
@@ -145,7 +146,7 @@ c-------------------------------------------------------------------------
 
       parameter (lxyz=lx1*ly1*lz1)
       real ur(lxyz),us(lxyz),ut(lxyz),wk(lxyz)
-      real w(nx1*ny1*nz1),u(nx1*ny1*nz1),g(2*ldim,nx1*ny1*nz1)
+      real w(nx1*ny1*nz1),u(nx1*ny1*nz1),g(nx1*ny1*nz1,2*ldim)
 
 
       nxyz = nx1*ny1*nz1
@@ -154,9 +155,9 @@ c-------------------------------------------------------------------------
       call local_grad3(ur,us,ut,u,n,dxm1,dxtm1)
 
       do i=1,nxyz
-         wr = g(1,i)*ur(i) + g(2,i)*us(i) + g(3,i)*ut(i)
-         ws = g(2,i)*ur(i) + g(4,i)*us(i) + g(5,i)*ut(i)
-         wt = g(3,i)*ur(i) + g(5,i)*us(i) + g(6,i)*ut(i)
+         wr = g(i,1)*ur(i) + g(i,2)*us(i) + g(i,3)*ut(i)
+         ws = g(i,2)*ur(i) + g(i,4)*us(i) + g(i,5)*ut(i)
+         wt = g(i,3)*ur(i) + g(i,5)*us(i) + g(i,6)*ut(i)
          ur(i) = wr
          us(i) = ws
          ut(i) = wt
@@ -367,3 +368,436 @@ c  1  format(7i7,a8)
       return
       end
 c-----------------------------------------------------------------------
+
+
+#ifdef _OPENACC
+
+c-----------------------------------------------------------------------
+      subroutine cg_acc(x,f,g,c,r,w,p,z,n,niter,flop_cg)
+      include 'SIZE'
+
+c     Solve Ax=f where A is SPD and is invoked by ax()
+c
+c     Output:  x - vector of length n
+c
+c     Input:   f - vector of length n
+c     Input:   g - geometric factors for SEM operator
+c     Input:   c - inverse of the counting matrix
+c
+c     Work arrays:   r,w,p,z  - vectors of length n
+c
+c     User-provided ax(w,z,n) returns  w := Az,  
+c
+c     User-provided solveM(z,r,n) ) returns  z := M^-1 r,  
+c
+
+      common /mymask/cmask(-1:lx1*ly1*lz1*lelt)
+      parameter (lt=lx1*ly1*lz1*lelt)
+
+c      real ur(lt),us(lt),ut(lt),wk(lt)      
+      common /TEMP0_ACC/ ur(lx1,lx1,lx1,lelt)
+     $     ,             us(lx1,lx1,lx1,lelt)
+     $     ,             ut(lx1,lx1,lx1,lelt)
+     $     ,             wk(lx1,lx1,lx1,lelt)
+      real ur,us,ut,wk
+
+      real x(n),f(n),r(n),w(n),z(n),c(n)
+      real p(lx1,lx1,lx1,lelt)
+      
+      real g(2*ldim,lt)
+
+      character*1 ans
+
+      pap = 0.0
+
+c     set machine tolerances
+      one = 1.
+      eps = 1.e-20
+      if (one+eps .eq. one) eps = 1.e-14
+      if (one+eps .eq. one) eps = 1.e-7
+
+      rtz1=1.0
+
+!$ACC DATA PRESENT(x,g,c,r,w,p,z,ur,us,ut,wk)
+      call copy(r,f,n)
+      call maskit (r,cmask,nx1,ny1,nz1) ! Zero out Dirichlet conditions
+ 
+!$ACC UPDATE DEVICE(r,cmask,c,p)
+      call rzero_acc(x,n)
+      rnorm = sqrt(glsc3_acc(r,c,r,n))
+      iter = 0
+      if (nid.eq.0)  write(6,6) iter,rnorm
+
+      miter = niter
+c     call tester(z,r,n)  
+      do iter=1,miter
+         call solveM_acc(z,r,n)    ! preconditioner here
+
+         rtz2=rtz1                                                       ! OPS
+         rtz1=glsc3_acc(r,c,z,n)   ! parallel weighted inner product r^T C z ! 3n
+
+         beta = rtz1/rtz2
+         if (iter.eq.1) beta=0.0
+         call add2s1_acc(p,z,beta,n)                                     ! 2n
+
+         call ax_acc(w,p,g,ur,us,ut,wk,n)                                ! flopa
+
+         pap=glsc3_acc(w,c,p,n)                                          ! 3n
+
+         alpha=rtz1/pap
+         alphm=-alpha
+         call add2s2_acc(x,p,alpha,n)                                    ! 2n
+         call add2s2_acc(r,w,alphm,n)                                    ! 2n
+         rtr = glsc3_acc(r,c,r,n)                                        ! 3n
+
+         if (iter.eq.1) rlim2 = rtr*eps**2
+         if (iter.eq.1) rtr0  = rtr
+         rnorm = sqrt(rtr)
+C        if (nid.eq.0.and.mod(iter,100).eq.0) 
+C    $      write(6,6) iter,rnorm,alpha,beta,pap
+        if (nid.eq.0.) 
+     $        write(6,6) iter,rnorm,alpha,beta,pap
+
+    6    format('cg:',i4,1p4e12.4)
+c        if (rtr.le.rlim2) goto 1001
+
+      enddo
+
+ 1001 continue
+
+!$ACC END DATA
+
+      if (nid.eq.0) write(6,6) iter,rnorm,alpha,beta,pap
+
+      flop_cg = flop_cg + iter*15.*n
+
+      return
+      end
+
+
+c-----------------------------------------------------------------------
+      subroutine maskit_acc(w,pmask,nx,ny,nz)   ! Zero out Dirichlet conditions
+      include 'SIZE'
+      include 'PARALLEL'
+
+      real pmask(-1:lx1*ly1*lz1*lelt)
+      real w(nx1*ny1*nz1*lelt)
+      integer i,j,e
+
+      nxyz = nx*ny*nz
+      nxy  = nx*ny
+
+!$ACC DATA PRESENT(w,pmask)
+      if(pmask(-1).lt.0) then
+        j=pmask(0)
+       
+!$ACC PARALLEL LOOP
+        do i = 1,j
+           k = pmask(i)
+           w(k)=0.0
+        enddo
+
+      else
+         write(*,*) "OpenACC version is not implemented yet"
+         stop
+c         Zero out Dirichlet boundaries.
+c
+c                      +------+     ^ Y
+c                     /   3  /|     |
+c               4--> /      / |     |
+c                   +------+ 2 +    +----> X
+c                   |   5  |  /    /
+c                   |      | /    /
+c                   +------+     Z   
+c
+
+        nn = 0
+!!$ACC PARALLEL LOOP 
+        do e  = 1,nelt
+           call get_face(w,nx,e)
+!!$ACC LOOP
+          do i = 1,nxyz
+             if(w(i).eq.0) then
+               nn=nn+1
+               pmask(nn)=i
+             endif
+          enddo
+        enddo     
+        pmask(-1) = -1.
+        pmask(0) = nn
+      endif
+!$ACC END DATA
+
+      return
+      end
+
+c-----------------------------------------------------------------------
+      subroutine solveM_acc(z,r,n)
+      include 'INPUT'
+      real z(n),r(n)
+
+      nn = n
+      call h1mg_solve_acc(z,r,nn)
+
+      return
+      end
+
+
+#ifdef CRAY_ACC
+c-----------------------------------------------------------------------
+      subroutine ax_acc(w,u,gxyz,ur,us,ut,wk,n) ! Matrix-vector product: w=A*u
+
+      include 'SIZE'
+      include 'TOTAL'
+
+c      real w(nx1*ny1*nz1,nelt),u(nx1*ny1*nz1,nelt)
+c      real gxyz(2*ldim,nx1*ny1*nz1,nelt)
+c      parameter (lt=lx1*ly1*lz1*lelt)
+c      real ur(lt),us(lt),ut(lt),wk(lt)
+      common /mymask/cmask(-1:lx1*ly1*lz1*lelt)
+
+      real w(nx1,ny1,nz1,nelt)
+      real u(nx1,ny1,nz1,nelt)
+      real gxyz(nx1,ny1,nz1,2*ldim,lelt)
+
+      real ur(nx1,ny1,nz1,lelt)
+      real us(nx1,ny1,nz1,lelt)
+      real ut(nx1,ny1,nz1,lelt)
+      real wk(nx1,ny1,nz1,lelt)
+
+      real wr,ws,wt,tmp
+      integer i,j,k,l,e,n
+
+      integer lt
+
+      lt = nx1*ny1*nz1*nelt
+
+!$ACC DATA PRESENT(w,u,gxyz,ur,us,ut,wk,dxm1,dxtm1)
+!$ACC PARALLEL LOOP COLLAPSE(4) GANG WORKER VECTOR
+!$acc&  private(wr,ws,wt)
+!DIR NOBLOCKING
+      do e = 1,nelt
+         do k=1,nz1
+         do j=1,ny1
+         do i=1,nx1
+            wr = 0      ! scalar ur gets promoted to a vector register over index ‘i’
+            ws = 0
+            wt = 0
+!$ACC LOOP SEQ
+            do l=1,nx1    ! serial loop, no reduction needed
+               wr = wr + dxm1(i,l)*u(l,j,k,e)
+               ws = ws + dxm1(j,l)*u(i,l,k,e)
+               wt = wt + dxm1(k,l)*u(i,j,l,e)
+            enddo
+            ur(i,j,k,e) = gxyz(i,j,k,1,e)*wr
+     $                  + gxyz(i,j,k,2,e)*ws
+     $                  + gxyz(i,j,k,3,e)*wt
+            us(i,j,k,e) = gxyz(i,j,k,2,e)*wr
+     $                  + gxyz(i,j,k,4,e)*ws
+     $                  + gxyz(i,j,k,5,e)*wt
+            ut(i,j,k,e) = gxyz(i,j,k,3,e)*wr
+     $                  + gxyz(i,j,k,5,e)*ws
+     $                  + gxyz(i,j,k,6,e)*wt
+         enddo
+         enddo
+         enddo
+      enddo
+!$ACC END PARALLEL LOOP
+
+!$ACC PARALLEL LOOP COLLAPSE(4) GANG WORKER VECTOR 
+      do e=1,nelt
+         do k=1,nz1
+         do j=1,ny1
+         do i=1,nx1
+            w(i,j,k,e) = 0.0
+!$ACC LOOP SEQ
+            do l=1,nx1    ! serial loop, no reduction needed
+               w(i,j,k,e) = w(i,j,k,e) + dxtm1(i,l)*ur(l,j,k,e)
+     $                                 + dxtm1(j,l)*us(i,l,k,e)
+     $                                 + dxtm1(k,l)*ut(i,j,l,e)
+            enddo
+         enddo
+         enddo
+         enddo
+      enddo
+!$ACC END PARALLEL LOOP
+
+      call dssum2_acc(w)         ! Gather-scatter operation  ! w   = QQ  w
+                                                            !            L
+      call add2s2_acc(w,u,.1,n)   !2n
+      call maskit_acc(w,cmask,nx1,ny1,nz1)  ! Zero out Dirichlet conditions
+
+!$ACC END DATA
+
+      nxyz=nx1*ny1*nz1
+      flop_a = flop_a + (19*nxyz+12*nx1*nxyz)*nelt
+
+      return
+      end
+
+#else
+c-----------------------------------------------------------------------
+      subroutine ax_acc(w,u,gxyz,ur,us,ut,wk,n) ! Matrix-vector product: w=A*u
+
+#ifdef TUNED_CUF_KERNEL
+      use cudafor
+#endif
+
+      include 'SIZE'
+      include 'TOTAL'
+
+#ifdef TUNED_CUF_KERNEL
+      interface
+      attributes(global) subroutine ax_cuf2(w,u,ur,us,ut,
+     &                gxyz,dxm1,dxtm1)
+
+      real, intent(out) :: w(nx1,ny1,nz1,nelt)
+      real, intent(in)  :: u(nx1,ny1,nz1,nelt)
+      real ur  (nx1,ny1,nz1,lelt)
+      real us  (nx1,ny1,nz1,lelt)
+      real ut  (nx1,ny1,nz1,lelt)
+
+      real gxyz(nx1,ny1,nz1,2*ldim,lelt)
+
+      real, intent(in) :: dxm1(nx1,nx1)
+      real, intent(in) :: dxtm1(nx1,nx1)
+      end subroutine
+      end interface
+#endif
+c      real w(nx1*ny1*nz1,nelt),u(nx1*ny1*nz1,nelt)
+c      real gxyz(2*ldim,nx1*ny1*nz1,nelt)
+c      parameter (lt=lx1*ly1*lz1*lelt)
+c      real ur(lt),us(lt),ut(lt),wk(lt)
+      common /mymask/cmask(-1:lx1*ly1*lz1*lelt)
+
+      real w(nx1,ny1,nz1,nelt)
+      real u(nx1,ny1,nz1,nelt)
+      real gxyz(nx1,ny1,nz1,2*ldim,lelt)
+
+      real ur(nx1,ny1,nz1,lelt)
+      real us(nx1,ny1,nz1,lelt)
+      real ut(nx1,ny1,nz1,lelt)
+      real wk(nx1,ny1,nz1,lelt)
+
+      real wr,ws,wt,tmp
+      integer i,j,k,l,e,n
+
+      integer lt
+
+      lt = nx1*ny1*nz1*nelt
+
+!$ACC DATA PRESENT(w,u(:,:,:,:),gxyz,ur,us,ut,wk,dxm1,dxtm1)
+
+#ifdef TUNED_CUF_KERNEL
+
+c      w = 0.0
+c      u = 1.0
+c      ur = -1.0
+c      us = -1.0
+c      ut = -1.0
+c      gxyz = 1.0
+c      dxm1 = 1.0
+c      dxtm1 = 1.0
+
+!$acc host_data use_device(w,u(:,:,:,:),ur,us,ut,gxyz,dxm1,dxtm1)
+       if (nx1.eq.10) then
+         call ax_cuf2<<<nelt,dim3(nx1,ny1,nz1)>>>(w,u,
+     $                ur,us,ut,gxyz,dxm1,dxtm1)
+       else if (nx1.eq.12) then
+         call ax_cuf2<<<nelt,dim3(nx1,ny1,nz1/2)>>>(w,u,
+     $                ur,us,ut,gxyz,dxm1,dxtm1)
+       else
+c         call ax_cuf2<<<nelt,dim3(nx1,ny1,nz1/4)>>>(w,u,
+c     $                ur,us,ut,gxyz,dxm1,dxtm1)
+         call ax_cuf2<<<nelt,dim3(nx1,ny1,nz1/4)>>>(w,u,                            
+     $         ur,us,ut,gxyz,dxm1,dxtm1) 
+
+       endif
+       istat = cudaDeviceSynchronize()
+!$acc end host_data
+
+    
+!!$acc update host(w,u,ur,us,ut,gxyz,dxm1,dxtm1)
+!!$acc wait
+!      write(*,*) "www22 = ", sum(w), sum(u), w(1,1,16,:)
+c      write(*,*) "gxyz2 = ",sum(gxyz),sum(ur),sum(us),sum(ut)
+
+#else
+            
+!$ACC KERNELS
+      do e = 1,nelt
+!$ACC LOOP COLLAPSE(3)
+         do k=1,nz1
+         do j=1,ny1
+         do i=1,nx1
+            wr = 0      ! scalar ur gets promoted to vector register over index
+            ws = 0
+            wt = 0
+!$ACC LOOP SEQ
+            do l=1,nx1    ! serial loop, no reduction needed
+               wr = wr + dxm1(i,l)*u(l,j,k,e)
+
+               ws = ws + dxm1(j,l)*u(i,l,k,e)
+               wt = wt + dxm1(k,l)*u(i,j,l,e)
+            enddo
+            ur(i,j,k,e) = gxyz(i,j,k,1,e)*wr
+     $                  + gxyz(i,j,k,2,e)*ws
+     $                  + gxyz(i,j,k,3,e)*wt
+            us(i,j,k,e) = gxyz(i,j,k,2,e)*wr
+     $                  + gxyz(i,j,k,4,e)*ws
+     $                  + gxyz(i,j,k,5,e)*wt
+            ut(i,j,k,e) = gxyz(i,j,k,3,e)*wr
+     $                  + gxyz(i,j,k,5,e)*ws
+     $                  + gxyz(i,j,k,6,e)*wt
+         enddo
+         enddo
+         enddo
+      enddo
+!$ACC END KERNELS
+
+
+!$ACC KERNELS
+      do e=1,nelt
+!$ACC LOOP COLLAPSE(3)
+         do k=1,nz1
+         do j=1,ny1
+         do i=1,nx1
+            w(i,j,k,e) = 0.0
+!$ACC LOOP SEQ
+            do l=1,nx1    ! serial loop, no reduction needed
+               w(i,j,k,e) = w(i,j,k,e) + dxtm1(i,l)*ur(l,j,k,e)
+     $                                 + dxtm1(j,l)*us(i,l,k,e)
+     $                                 + dxtm1(k,l)*ut(i,j,l,e)
+            enddo
+         enddo
+         enddo
+         enddo
+      enddo
+!$ACC END KERNELS
+
+#endif
+
+#ifdef GPUDIRECT
+      call dssum(w)         ! Gather-scatter operation  ! w   = QQ  w
+                                                            !        L
+#else
+      call dssum_acc(w)         ! Gather-scatter operation  ! w   = QQ  w
+                                                            !        L
+#endif
+
+      call add2s2_acc(w,u,.1,n)   !2n
+      call maskit_acc(w,cmask,nx1,ny1,nz1)  ! Zero out Dirichlet conditions
+
+!      stop
+
+!$ACC END DATA
+
+      nxyz=nx1*ny1*nz1
+      flop_a = flop_a + (19*nxyz+12*nx1*nxyz)*nelt
+
+      return
+      end
+
+#endif
+
+#endif 

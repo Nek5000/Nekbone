@@ -1,0 +1,13 @@
+ftn -c  -O2 -ra -s real64 -eZ -em -Rc -DPTRSIZE8 -DMPI -DLONGINT8 -DUNDERSCORE -DGLOBAL_LONG_LONG -I/lus/scratch/p01633/toBrent/nekbone-3.1/test/example1 -I/lus/scratch/p01633/toBrent/nekbone-3.1/src -I./ /lus/scratch/p01633/toBrent/nekbone-3.1/src/prox_dssum.f -o obj/prox_dssum.o
+
+
+ftn-1279 crayftn: WARNING PROXY_SETUPDS_ACC, File = ../../../../../lus/scratch/p01633/toBrent/nekbone-3.1/src/prox_dssum.f, Line = 366, Column = 29 
+  Procedure "LDSSUM" is defined at line 266 (/lus/scratch/p01633/toBrent/nekbone-3.1/src/prox_dssum.f).  The type of this argument does not agree with dummy argument "UG".
+
+ftn -o nekbone  obj/cg.o obj/driver.o obj/math.o obj/mxm_wrapper.o obj/prox_dssum.o obj/prox_setup.o obj/semhat.o obj/speclib.o obj/delay_dum.o obj/hsmg_dum.o obj/comm_mpi.o obj/mxm_std.o obj/blas.o obj/jl_gs.o obj/jl_sort.o obj/jl_sarray_transfer.o obj/jl_sarray_sort.o obj/jl_gs_local.o obj/jl_crystal.o obj/jl_comm.o obj/jl_tensor.o obj/jl_fail.o obj/jl_fcrystal.o obj/jl_sleep.o 
+#############################################################
+#                  Compilation successful!                  #
+#############################################################
+   text	   data	    bss	    dec	    hex	filename
+1918646	 119920	231025040	233063606	de444b6	nekbone
+

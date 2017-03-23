@@ -24,7 +24,7 @@ c-----------------------------------------------------------------------
       call mpi_attr_get(MPI_COMM_WORLD,MPI_TAG_UB,nval,flag,ierr)
       if (nval.lt.(10000+max(lp,lelg))) then
          if(nid.eq.0) write(6,*) 'ABORT: MPI_TAG_UB too small!'
-         call exitt
+c         call exitt
       endif
 
       IF (NP.GT.LP) THEN

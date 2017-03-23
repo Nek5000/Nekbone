@@ -5,7 +5,7 @@ c-----------------------------------------------------------------------
       include 'TOTAL'
 
       real a(lx1*lx1),b(lx1),c(lx1*lx1),d(lx1*lx1),z(lx1)
-     $               , w(lx1*2),g(6,nx1*ny1*nz1*nelt)
+     $               , w(lx1*2),g(nx1*ny1*nz1,6,nelt)
 
       call semhat(a,b,c,d,z,w,nx1-1)
 
@@ -28,21 +28,21 @@ c-------------------------------------------------------------------------
 
       include 'SIZE'
       include 'TOTAL'
-      real g(6,nx1,ny1,nz1,nelt)
+      real g(nx1,ny1,nz1,6,nelt)
       integer e
 
       n = nx1*ny1*nz1*nelt
 
+      g = 0
 
       do e=1,nelt
       do k=1,nz1
       do j=1,ny1
       do i=1,nx1
-         call rzero(g(1,i,j,k,e),6)
-         g(1,i,j,k,e) = wxm1(i)*wxm1(j)*wxm1(k)
-         g(4,i,j,k,e) = wxm1(i)*wxm1(j)*wxm1(k)
-         g(6,i,j,k,e) = wxm1(i)*wxm1(j)*wxm1(k)
-         g(6,i,j,k,e) = wxm1(i)*wxm1(j)*wxm1(k)
+c        call rzero(g(1,i,j,k,e),6)
+         g(i,j,k,1,e) = wxm1(i)*wxm1(j)*wxm1(k)
+         g(i,j,k,4,e) = wxm1(i)*wxm1(j)*wxm1(k)
+         g(i,j,k,6,e) = wxm1(i)*wxm1(j)*wxm1(k)
       enddo
       enddo
       enddo
