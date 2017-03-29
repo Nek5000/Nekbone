@@ -1,38 +1,10 @@
 c-----------------------------------------------------------------------
       program nekbone
 
-c#if 0 
-c      use cudafor
-c#endif
-      
       include 'SIZE'
       include 'TOTAL'
       include 'SEMHAT'
       include 'mpif.h'
-
-#if 0
-      interface
-      attributes(global) subroutine ax_cuf1(w,u,ur,us,ut,
-     &                gxyz1,gxyz2,gxyz3,gxyz4,gxyz5,gxyz6,dxm1,dxtm1)
-
-      real, intent(out) :: w(lx1,ly1,lz1,lelt)
-      real, intent(in)  :: u(lx1,ly1,lz1,lelt)
-      real ur  (lx1,ly1,lz1,lelt)
-      real us  (lx1,ly1,lz1,lelt)
-      real ut  (lx1,ly1,lz1,lelt)
-
-      real gxyz1(lx1,ly1,lz1,lelt)
-      real gxyz2(lx1,ly1,lz1,lelt)
-      real gxyz3(lx1,ly1,lz1,lelt)
-      real gxyz4(lx1,ly1,lz1,lelt)
-      real gxyz5(lx1,ly1,lz1,lelt)
-      real gxyz6(lx1,ly1,lz1,lelt)
-
-      real, intent(in) :: dxm1(lx1,lx1)
-      real, intent(in) :: dxtm1(lx1,lx1)
-      end subroutine
-      end interface
-#endif
 
       common /mymask/cmask(-1:lx1*ly1*lz1*lelt)
       parameter (lxyz = lx1*ly1*lz1)
@@ -104,10 +76,6 @@ c     SET UP and RUN NEKBONE
 
            call set_f(f,c,n)
 !!!$ACC UPDATE HOST(f)
-
-c           write(*,*) "ffffffffffffffff "
-c           write(*,*) f
-c           stop
 
            if(nid.eq.0) write(6,*)
 

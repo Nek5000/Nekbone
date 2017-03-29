@@ -1,24 +1,24 @@
 ### makefile automatically created by makenek 10/17/2014 03:38:09 ###
-BINNAME=nekbone_cuda
+BINNAME=nekbone_acc
 CASENAME:=3d
 CASEDIR := $(HOME)/repos/Nekbone/test/nek_cuf16
 S := $(HOME)/repos/Nekbone/src
 J:=$S/jl
 OPT_INCDIR:=./
-OBJDIR=obj_cuda
+OBJDIR=obj_acc
 IFMPI:=true
 IFNEKCOMM:=
 IFNEKDLAY:=
 IFMGRID:=
 F77 := mpif90
 CC := mpicc
-P := -r8 -Mpreprocess -Mfixed -acc -Minfo=accel -Mcuda,cc60 -ta=nvidia,cc60
+P := -r8 -Mpreprocess -Mfixed -acc -Minfo=accel -ta=nvidia,cc60
 PPPO=
-PPS= PTRSIZE8 PGI_ACC MPI LONGINT8 UNDERSCORE GLOBAL_LONG_LONG TUNED_CUF_KERNEL
+PPS= PTRSIZE8 PGI_ACC MPI LONGINT8 UNDERSCORE GLOBAL_LONG_LONG
 G:=
 OPT_FLAGS_STD=
 USR:=
-USR_LFLAGS := -Mcuda,cc60 -ta=nvidia,cc60
+USR_LFLAGS := -Mcuda=cc60 -ta=nvidia,cc60
 # -ta=nvidia:kepler 
 #-ta=tesla,cc35
 
@@ -125,7 +125,7 @@ ifeq ($(IFMPI),false)
 endif
 
 clean:
-	rm -rf ./obj ${BINNAME}
+	rm -rf $(OBJDIR) ${BINNAME}
 
 $(NOBJS_Fbon) : SIZE
 # CORE      ############################################################################

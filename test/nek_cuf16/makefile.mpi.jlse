@@ -1,26 +1,24 @@
 ### makefile automatically created by makenek 10/17/2014 03:38:09 ###
-BINNAME=nekbone_cuda
+BINNAME=nekbone_mpi
 CASENAME:=3d
 CASEDIR := $(HOME)/repos/Nekbone/test/nek_cuf16
 S := $(HOME)/repos/Nekbone/src
 J:=$S/jl
 OPT_INCDIR:=./
-OBJDIR=obj_cuda
+OBJDIR=obj_mpi
 IFMPI:=true
 IFNEKCOMM:=
 IFNEKDLAY:=
 IFMGRID:=
 F77 := mpif90
 CC := mpicc
-P := -r8 -Mpreprocess -Mfixed -acc -Minfo=accel -Mcuda,cc60 -ta=nvidia,cc60
+P := -r8 -Mpreprocess -Mfixed 
 PPPO=
-PPS= PTRSIZE8 PGI_ACC MPI LONGINT8 UNDERSCORE GLOBAL_LONG_LONG TUNED_CUF_KERNEL
+PPS = PTRSIZE8 MPI LONGINT8 UNDERSCORE GLOBAL_LONG_LONG 
 G:=
 OPT_FLAGS_STD=
 USR:=
-USR_LFLAGS := -Mcuda,cc60 -ta=nvidia,cc60
-# -ta=nvidia:kepler 
-#-ta=tesla,cc35
+USR_LFLAGS := 
 
 ################################################################################
 
@@ -53,11 +51,6 @@ endif
 # MXM 
 MXM=mxm_std.o blas.o
 
-################################################################################
-# CUF
-NEKCUF=nek_kernel16.o 
-
-
 # JL Routines ###################################################################
 JO  = jl_
 JL := -DPREFIX=jl_
@@ -78,7 +71,7 @@ else
 endif
 
 #####################################################################################
-TMPBON = $(BONE) $(COMM_MPI) $(MXM) $(NEKCUF)
+TMPBON = $(BONE) $(COMM_MPI) $(MXM)
 NOBJS_Fbon = $(patsubst %,$(OBJDIR)/%,$(TMPBON))
 
 TMP0c = $(JLCORE)
@@ -168,7 +161,3 @@ $(OBJDIR)/$(JO)fcrystal.o        :$(J)/fcrystal.c;        $(CC) -c $(cFL2) $(JL)
 $(OBJDIR)/$(JO)sleep.o		:$(J)/sleep.c;		$(CC) -c $(cFL2) $(JL) $< -o $@
 $(OBJDIR)/$(JO)gs.o              :$(J)/gs.c;              $(CC) -c $(cFL2) $(JL) $< -o $@
 $(OBJDIR)/$(JO)gs_local.o        :$(J)/gs_local.c;        $(CC) -c $(cFL2) $(JL) $< -o $@
-
-# CUF
-  ############################################################################
-$(OBJDIR)/nek_kernel16.o   :$S/nek_kernel16.cuf;  $(F77) -c $(FL3) $< -o $@
