@@ -10,15 +10,18 @@ IFMPI:=true
 IFNEKCOMM:=
 IFNEKDLAY:=
 IFMGRID:=
+IFACC_PGI:=true
+IFACC_CRAY:=false
+IFCUDA:=true
 F77 := mpif90
 CC := mpicc
-P := -r8 -Mpreprocess -Mfixed -acc -Minfo=accel -Mcuda,cc60 -ta=nvidia,cc60
+P := -r8 -Mpreprocess -Mfixed -acc -Minfo=accel -Mcuda=cc60 -ta=nvidia,cc60
 PPPO=
 PPS= PTRSIZE8 PGI_ACC MPI LONGINT8 UNDERSCORE GLOBAL_LONG_LONG TUNED_CUF_KERNEL
 G:=
 OPT_FLAGS_STD=
 USR:=
-USR_LFLAGS := -Mcuda,cc60 -ta=nvidia,cc60
+USR_LFLAGS := -Mcuda=cc60 -ta=nvidia,cc60
 # -ta=nvidia:kepler 
 #-ta=tesla,cc35
 
@@ -54,9 +57,21 @@ endif
 MXM=mxm_std.o blas.o
 
 ################################################################################
-# CUF
-NEKCUF=nek_kernel16.o 
+# ACC
 
+ifeq ($(IFACC_PGI), true)
+BONE += ax_acc_pgi.o
+else
+ifeq ($(IFACC_CRAY), true)
+BONE += ax_acc_cray.o
+endif
+endif
+
+################################################################################
+# CUDA
+ifeq ($(IFCUDA), true)
+BONE += nek_kernel16.o 
+endif
 
 # JL Routines ###################################################################
 JO  = jl_
@@ -78,7 +93,7 @@ else
 endif
 
 #####################################################################################
-TMPBON = $(BONE) $(COMM_MPI) $(MXM) $(NEKCUF)
+TMPBON = $(BONE) $(COMM_MPI) $(MXM)
 NOBJS_Fbon = $(patsubst %,$(OBJDIR)/%,$(TMPBON))
 
 TMP0c = $(JLCORE)
@@ -125,7 +140,7 @@ ifeq ($(IFMPI),false)
 endif
 
 clean:
-	rm -rf ./obj ${BINNAME}
+	rm -rf $(OBJDIR) ${BINNAME}
 
 $(NOBJS_Fbon) : SIZE
 # CORE      ############################################################################
@@ -169,6 +184,9 @@ $(OBJDIR)/$(JO)sleep.o		:$(J)/sleep.c;		$(CC) -c $(cFL2) $(JL) $< -o $@
 $(OBJDIR)/$(JO)gs.o              :$(J)/gs.c;              $(CC) -c $(cFL2) $(JL) $< -o $@
 $(OBJDIR)/$(JO)gs_local.o        :$(J)/gs_local.c;        $(CC) -c $(cFL2) $(JL) $< -o $@
 
-# CUF
-  ############################################################################
+# OPENACC #########################################################################################
+$(OBJDIR)/ax_acc_pgi.o  :$S/ax_acc_pgi.f;   $(F77) -c $(FL3) $< -o $@
+$(OBJDIR)/ax_acc_cray.o :$S/ax_acc_cray.f;  $(F77) -c $(FL3) $< -o $@
+
+# CUDA ############################################################################################
 $(OBJDIR)/nek_kernel16.o   :$S/nek_kernel16.cuf;  $(F77) -c $(FL3) $< -o $@

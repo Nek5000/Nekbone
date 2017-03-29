@@ -10,6 +10,9 @@ IFMPI:=true
 IFNEKCOMM:=
 IFNEKDLAY:=
 IFMGRID:=
+IFACC_PGI:=false
+IFACC_CRAY:=false
+IFCUDA:=false
 F77 := mpif90
 CC := mpicc
 P := -r8 -Mpreprocess -Mfixed 
@@ -50,6 +53,23 @@ endif
 ################################################################################
 # MXM 
 MXM=mxm_std.o blas.o
+
+################################################################################
+# ACC
+
+ifeq ($(IFACC_PGI), true)
+BONE += ax_acc_pgi.o
+else
+ifeq ($(IFACC_CRAY), true)
+BONE += ax_acc_cray.o
+endif
+endif
+
+################################################################################
+# CUDA
+ifeq ($(IFCUDA), true)
+BONE += nek_kernel16.o 
+endif
 
 # JL Routines ###################################################################
 JO  = jl_
@@ -118,7 +138,7 @@ ifeq ($(IFMPI),false)
 endif
 
 clean:
-	rm -rf ./obj ${BINNAME}
+	rm -rf $(OBJDIR) ${BINNAME}
 
 $(NOBJS_Fbon) : SIZE
 # CORE      ############################################################################
@@ -161,3 +181,10 @@ $(OBJDIR)/$(JO)fcrystal.o        :$(J)/fcrystal.c;        $(CC) -c $(cFL2) $(JL)
 $(OBJDIR)/$(JO)sleep.o		:$(J)/sleep.c;		$(CC) -c $(cFL2) $(JL) $< -o $@
 $(OBJDIR)/$(JO)gs.o              :$(J)/gs.c;              $(CC) -c $(cFL2) $(JL) $< -o $@
 $(OBJDIR)/$(JO)gs_local.o        :$(J)/gs_local.c;        $(CC) -c $(cFL2) $(JL) $< -o $@
+
+# OPENACC #########################################################################################
+$(OBJDIR)/ax_acc_pgi.o  :$S/ax_acc_pgi.f;   $(F77) -c $(FL3) $< -o $@
+$(OBJDIR)/ax_acc_cray.o :$S/ax_acc_cray.f;  $(F77) -c $(FL3) $< -o $@
+
+# CUDA ############################################################################################
+$(OBJDIR)/nek_kernel16.o   :$S/nek_kernel16.cuf;  $(F77) -c $(FL3) $< -o $@
