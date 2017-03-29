@@ -635,6 +635,7 @@ c      real ur(lt),us(lt),ut(lt),wk(lt)
       return
       end
 
+c ifndef CRAY_ACC
 #else
 c-----------------------------------------------------------------------
       subroutine ax_acc(w,u,gxyz,ur,us,ut,wk,n) ! Matrix-vector product: w=A*u
@@ -664,10 +665,7 @@ c-----------------------------------------------------------------------
       end subroutine
       end interface
 #endif
-c      real w(nx1*ny1*nz1,nelt),u(nx1*ny1*nz1,nelt)
-c      real gxyz(2*ldim,nx1*ny1*nz1,nelt)
-c      parameter (lt=lx1*ly1*lz1*lelt)
-c      real ur(lt),us(lt),ut(lt),wk(lt)
+
       common /mymask/cmask(-1:lx1*ly1*lz1*lelt)
 
       real w(nx1,ny1,nz1,nelt)
@@ -692,15 +690,6 @@ c      real ur(lt),us(lt),ut(lt),wk(lt)
 
 #ifdef TUNED_CUF_KERNEL
 
-c      w = 0.0
-c      u = 1.0
-c      ur = -1.0
-c      us = -1.0
-c      ut = -1.0
-c      gxyz = 1.0
-c      dxm1 = 1.0
-c      dxtm1 = 1.0
-
 !$acc host_data use_device(w,u(:,:,:,:),ur,us,ut,gxyz,dxm1,dxtm1)
        if (nx1.eq.10) then
          call ax_cuf2<<<nelt,dim3(nx1,ny1,nz1)>>>(w,u,
@@ -722,7 +711,6 @@ c     $                ur,us,ut,gxyz,dxm1,dxtm1)
          call exitt
        endif
 
-
        istat = cudaDeviceSynchronize()
        
        cuda_err = cudaGetLastError()
@@ -733,27 +721,20 @@ c     $                ur,us,ut,gxyz,dxm1,dxtm1)
 
 !$acc end host_data
 
-    
-!!$acc update host(w,u,ur,us,ut,gxyz,dxm1,dxtm1)
-!!$acc wait
-!      write(*,*) "www22 = ", sum(w), sum(u), w(1,1,16,:)
-c      write(*,*) "gxyz2 = ",sum(gxyz),sum(ur),sum(us),sum(ut)
-
 #else
+c ifndef TUNED_CUF_KERNEL
             
-!$ACC KERNELS
+!$ACC PARALLEL LOOP COLLAPSE(4) GANG WORKER VECTOR PRIVATE(wr,ws,wt)
       do e = 1,nelt
-!$ACC LOOP COLLAPSE(3)
          do k=1,nz1
          do j=1,ny1
          do i=1,nx1
-            wr = 0      ! scalar ur gets promoted to vector register over index
+            wr = 0
             ws = 0
             wt = 0
 !$ACC LOOP SEQ
             do l=1,nx1    ! serial loop, no reduction needed
                wr = wr + dxm1(i,l)*u(l,j,k,e)
-
                ws = ws + dxm1(j,l)*u(i,l,k,e)
                wt = wt + dxm1(k,l)*u(i,j,l,e)
             enddo
@@ -770,12 +751,10 @@ c      write(*,*) "gxyz2 = ",sum(gxyz),sum(ur),sum(us),sum(ut)
          enddo
          enddo
       enddo
-!$ACC END KERNELS
+!$ACC END PARALLEL LOOP
 
-
-!$ACC KERNELS
+!$ACC PARALLEL LOOP COLLAPSE(4) GANG WORKER VECTOR 
       do e=1,nelt
-!$ACC LOOP COLLAPSE(3)
          do k=1,nz1
          do j=1,ny1
          do i=1,nx1
@@ -790,22 +769,19 @@ c      write(*,*) "gxyz2 = ",sum(gxyz),sum(ur),sum(us),sum(ut)
          enddo
          enddo
       enddo
-!$ACC END KERNELS
+!$ACC END PARALLEL LOOP
 
 #endif
+c endif TUNED_CUF_KERNEL
 
 #ifdef GPUDIRECT
       call dssum(w)         ! Gather-scatter operation  ! w   = QQ  w
-                                                            !        L
 #else
       call dssum_acc(w)         ! Gather-scatter operation  ! w   = QQ  w
-                                                            !        L
 #endif
 
       call add2s2_acc(w,u,.1,n)   !2n
       call maskit_acc(w,cmask,nx1,ny1,nz1)  ! Zero out Dirichlet conditions
-
-!      stop
 
 !$ACC END DATA
 
@@ -815,6 +791,7 @@ c      write(*,*) "gxyz2 = ",sum(gxyz),sum(ur),sum(us),sum(ut)
       return
       end
 
+c end IFDEF CRAY_ACC
 #endif
-
+c end IFDEF_ACC
 #endif 
