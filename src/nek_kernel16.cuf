@@ -1,7 +1,7 @@
       attributes(global) subroutine ax_cuf2(w,u,ur,us,ut,
      &                gxyz,dxm1,dxtm1)
 
-      include 'SIZE_CUF'
+      include 'SIZE'
 
       real, intent(out) :: w(lx1,ly1,lz1,lelt)
 !      real, intent(in)  :: u(lx1,ly1,lz1,lelt)
