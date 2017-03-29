@@ -683,6 +683,8 @@ c      real ur(lt),us(lt),ut(lt),wk(lt)
       integer i,j,k,l,e,n
 
       integer lt
+      
+      integer cuda_err
 
       lt = nx1*ny1*nz1*nelt
 
@@ -709,11 +711,26 @@ c      dxtm1 = 1.0
        else
 c         call ax_cuf2<<<nelt,dim3(nx1,ny1,nz1/4)>>>(w,u,
 c     $                ur,us,ut,gxyz,dxm1,dxtm1)
-         call ax_cuf2<<<nelt,dim3(nx1,ny1,nz1/4)>>>(w,u,                            
+         call ax_cuf2<<<nelt,dim3(nx1,ny1,nz1/4)>>>(w,u,
      $         ur,us,ut,gxyz,dxm1,dxtm1) 
-
        endif
+       
+       cuda_err = cudaGetLastError()
+       if (cuda_err /= cudaSuccess) then
+         write(6, 815) cuda_err, cudaGetErrorString(cuda_err)
+  815    format('CUDA ERROR', I3, ': ', A)
+         call exitt
+       endif
+
+
        istat = cudaDeviceSynchronize()
+       
+       cuda_err = cudaGetLastError()
+       if (cuda_err /= cudaSuccess) then
+         write(6, 815) cuda_err, cudaGetErrorString(cuda_err)
+         call exitt
+       endif
+
 !$acc end host_data
 
     
