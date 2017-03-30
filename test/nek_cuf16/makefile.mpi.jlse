@@ -10,8 +10,7 @@ IFMPI:=true
 IFNEKCOMM:=
 IFNEKDLAY:=
 IFMGRID:=
-IFACC_PGI:=false
-IFACC_CRAY:=false
+IFACC:=false
 IFCUDA:=false
 F77 := mpif90
 CC := mpicc
@@ -57,12 +56,8 @@ MXM=mxm_std.o blas.o
 ################################################################################
 # ACC
 
-ifeq ($(IFACC_PGI), true)
-BONE += ax_acc_pgi.o
-else
-ifeq ($(IFACC_CRAY), true)
-BONE += ax_acc_cray.o
-endif
+ifeq ($(IFACC), true)
+BONE += ax_acc.o
 endif
 
 ################################################################################
@@ -183,8 +178,7 @@ $(OBJDIR)/$(JO)gs.o              :$(J)/gs.c;              $(CC) -c $(cFL2) $(JL)
 $(OBJDIR)/$(JO)gs_local.o        :$(J)/gs_local.c;        $(CC) -c $(cFL2) $(JL) $< -o $@
 
 # OPENACC #########################################################################################
-$(OBJDIR)/ax_acc_pgi.o  :$S/ax_acc_pgi.f;   $(F77) -c $(FL3) $< -o $@
-$(OBJDIR)/ax_acc_cray.o :$S/ax_acc_cray.f;  $(F77) -c $(FL3) $< -o $@
+$(OBJDIR)/ax_acc.o  :$S/ax_acc.f;   $(F77) -c $(FL3) $< -o $@
 
 # CUDA ############################################################################################
 $(OBJDIR)/nek_kernel16.o   :$S/nek_kernel16.cuf;  $(F77) -c $(FL3) $< -o $@

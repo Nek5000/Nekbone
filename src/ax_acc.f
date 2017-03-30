@@ -86,6 +86,7 @@ c     $                ur,us,ut,gxyz,dxm1,dxtm1)
 c ifndef TUNED_CUF_KERNEL
             
 !$ACC PARALLEL LOOP COLLAPSE(4) GANG WORKER VECTOR PRIVATE(wr,ws,wt)
+!DIR NOBLOCKING
       do e = 1,nelt
          do k=1,nz1
          do j=1,ny1
