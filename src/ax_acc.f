@@ -1,14 +1,14 @@
 c-----------------------------------------------------------------------
       subroutine ax_acc(w,u,gxyz,ur,us,ut,wk,n) ! Matrix-vector product: w=A*u
 
-#ifdef TUNED_CUF_KERNEL
+#ifdef _CUDA
       use cudafor
 #endif
 
       include 'SIZE'
       include 'TOTAL'
 
-#ifdef TUNED_CUF_KERNEL
+#ifdef _CUDA
       interface
       attributes(global) subroutine ax_cuf2(w,u,ur,us,ut,
      &                gxyz,dxm1,dxtm1)
@@ -49,7 +49,7 @@ c-----------------------------------------------------------------------
 
 !$ACC DATA PRESENT(w,u(:,:,:,:),gxyz,ur,us,ut,wk,dxm1,dxtm1)
 
-#ifdef TUNED_CUF_KERNEL
+#ifdef _CUDA
 
 !$acc host_data use_device(w,u(:,:,:,:),ur,us,ut,gxyz,dxm1,dxtm1)
        if (nx1.eq.10) then
@@ -83,7 +83,7 @@ c     $                ur,us,ut,gxyz,dxm1,dxtm1)
 !$acc end host_data
 
 #else
-c ifndef TUNED_CUF_KERNEL
+c ifndef _CUDA
             
 !$ACC PARALLEL LOOP COLLAPSE(4) GANG WORKER VECTOR PRIVATE(wr,ws,wt)
 !DIR NOBLOCKING
@@ -134,7 +134,7 @@ c ifndef TUNED_CUF_KERNEL
 !$ACC END PARALLEL LOOP
 
 #endif
-c endif TUNED_CUF_KERNEL
+c endif _CUDA
 
 #ifdef GPUDIRECT
       call dssum(w)         ! Gather-scatter operation  ! w   = QQ  w
