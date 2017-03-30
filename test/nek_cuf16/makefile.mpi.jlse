@@ -10,7 +10,6 @@ IFMPI:=true
 IFNEKCOMM:=
 IFNEKDLAY:=
 IFMGRID:=
-IFCUDA:=false
 F77 := mpif90
 CC := mpicc
 P := -r8 -Mpreprocess -Mfixed 
@@ -54,9 +53,7 @@ MXM=mxm_std.o blas.o
 
 ################################################################################
 # CUDA
-ifeq ($(IFCUDA), true)
 BONE += nek_kernel16.o 
-endif
 
 # JL Routines ###################################################################
 JO  = jl_
@@ -173,4 +170,4 @@ $(OBJDIR)/$(JO)gs_local.o        :$(J)/gs_local.c;        $(CC) -c $(cFL2) $(JL)
 $(OBJDIR)/ax_acc.o  :$S/ax_acc.f;   $(F77) -c $(FL3) $< -o $@
 
 # CUDA ############################################################################################
-$(OBJDIR)/nek_kernel16.o   :$S/nek_kernel16.cuf;  $(F77) -c $(FL3) $< -o $@
+$(OBJDIR)/nek_kernel16.o   :$S/nek_kernel16.f;  $(F77) -c $(FL3) $< -o $@

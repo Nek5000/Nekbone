@@ -1,3 +1,5 @@
+#ifdef _CUDA
+
       attributes(global) subroutine ax_cuf2(w,u,ur,us,ut,
      &                gxyz,dxm1,dxtm1)
 
@@ -155,3 +157,13 @@
 
       return
       end
+
+#else
+
+      subroutine ax_cuf2(w,u,ur,us,ut,gxyz,dxm1,dxtm1)
+        call err_chk(
+     $ 'ERROR: Called ax_cuf2 but did not compile with CUDA')
+      return
+      end
+
+#endif
