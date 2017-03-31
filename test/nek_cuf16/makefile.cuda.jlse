@@ -55,7 +55,8 @@ MXM=mxm_std.o blas.o
 
 ################################################################################
 # CUDA
-BONE += nek_kernel16.o 
+BONE += ax_cuda.o 
+#BONE += nek_kernel16.o 
 
 # JL Routines ###################################################################
 JO  = jl_
@@ -172,4 +173,5 @@ $(OBJDIR)/$(JO)gs_local.o        :$(J)/gs_local.c;        $(CC) -c $(cFL2) $(JL)
 $(OBJDIR)/ax_acc.o  :$S/ax_acc.f;   $(F77) -c $(FL3) $< -o $@
 
 # CUDA ############################################################################################
-$(OBJDIR)/nek_kernel16.o   :$S/nek_kernel16.f;  $(F77) -c $(FL3) $< -o $@
+$(OBJDIR)/ax_cuda.o   :$S/ax_cuda.f;  $(F77) -c $(FL3) $< -o $@
+#$(OBJDIR)/nek_kernel16.o   :$S/nek_kernel16.f;  $(F77) -c $(FL3) $< -o $@
