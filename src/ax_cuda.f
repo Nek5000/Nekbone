@@ -6,7 +6,6 @@
       include 'SIZE'
 
       real, intent(out) :: w(lx1,ly1,lz1,lelt)
-!      real, intent(in)  :: u(lx1,ly1,lz1,lelt)
       real u(lx1,ly1,lz1,lelt)
       real ur  (lx1,ly1,lz1,lelt)
       real us  (lx1,ly1,lz1,lelt)
@@ -20,7 +19,7 @@
       real rtmp,stmp,ttmp,wijke
       real, shared :: shdxm1(lx1,ly1)
       real, shared :: shdxtm1(lx1,ly1)
-      integer l,e,i,j,k,kk
+      integer l,e,i,j,k,kk,n,nstrides
 
       e = blockIdx%x
       k = threadIdx%z
@@ -33,121 +32,63 @@
       end if
       call syncthreads()
 
-      rtmp = 0.0
-      stmp = 0.0
-      ttmp = 0.0
-      do l=1,lx1
-        rtmp = rtmp + shdxm1(i,l)    * u(l,j,k+12,e)
-        stmp = stmp + shdxm1(j,l)    * u(i,l,k+12,e)
-        ttmp = ttmp + shdxm1(k+12,l) * u(i,j,l,e)
+c Figure out how many strided accesses that this block needs to perform
+      nstrides = lz1 / blockDim%z
+      if (mod(lz1, blockDim%z) .gt. 0) then
+        nstrides = nstrides + 1
+      endif
+
+c Perform the strided accesses.  Each thread in the block proceeds in
+c lockstep.
+      kk = k
+      do n = 1, nstrides
+        if (kk .le. lz1) then
+          rtmp = 0.0
+          stmp = 0.0
+          ttmp = 0.0
+          do l = 1, lx1
+            rtmp = rtmp + shdxm1(i,l)  * u(l,j,kk,e)
+            stmp = stmp + shdxm1(j,l)  * u(i,l,kk,e)
+            ttmp = ttmp + shdxm1(kk,l) * u(i,j,l,e)
+          enddo
+          ur(i,j,kk,e) = gxyz(i,j,kk,1,e)*rtmp
+     $                 + gxyz(i,j,kk,2,e)*stmp
+     $                 + gxyz(i,j,kk,3,e)*ttmp
+          us(i,j,kk,e) = gxyz(i,j,kk,2,e)*rtmp
+     $                 + gxyz(i,j,kk,4,e)*stmp
+     $                 + gxyz(i,j,kk,5,e)*ttmp
+          ut(i,j,kk,e) = gxyz(i,j,kk,3,e)*rtmp
+     $                 + gxyz(i,j,kk,5,e)*stmp
+     $                 + gxyz(i,j,kk,6,e)*ttmp
+        endif
+        kk = kk + blockDim%z
+c       rahaman 2017-03-31: The optimized kernels (e.g.nek_kernel16.cuf)
+c       called synchthreads after each strided access.  I don't believe
+c       this is necessary.  When I omit the thread sync, I see no
+c       runtime erros and the solution matches CPU version
+c       call syncthreads()
       enddo
-      ur(i,j,k+12,e) = gxyz(i,j,k+12,1,e)*rtmp
-     $               + gxyz(i,j,k+12,2,e)*stmp
-     $               + gxyz(i,j,k+12,3,e)*ttmp
-      us(i,j,k+12,e) = gxyz(i,j,k+12,2,e)*rtmp
-     $               + gxyz(i,j,k+12,4,e)*stmp
-     $               + gxyz(i,j,k+12,5,e)*ttmp
-      ut(i,j,k+12,e) = gxyz(i,j,k+12,3,e)*rtmp
-     $               + gxyz(i,j,k+12,5,e)*stmp
-     $               + gxyz(i,j,k+12,6,e)*ttmp
+
       call syncthreads()
 
-
-      rtmp = 0.0
-      stmp = 0.0
-      ttmp = 0.0
-      do l=1,lx1
-        rtmp = rtmp + shdxm1(i,l)   * u(l,j,k+8,e)
-        stmp = stmp + shdxm1(j,l)   * u(i,l,k+8,e)
-        ttmp = ttmp + shdxm1(k+8,l) * u(i,j,l,e)
+      kk = k
+      do n = 1, nstrides
+        if (kk .le. lz1) then
+          wijke = 0.0
+          do l = 1, lx1
+            wijke = wijke + shdxtm1(i,l)  * ur(l,j,kk,e) 
+     $                    + shdxtm1(j,l)  * us(i,l,kk,e)
+     $                    + shdxtm1(kk,l) * ut(i,j,l,e)
+          enddo
+          w(i,j,kk,e) = wijke
+        endif
+        kk = kk + blockDim%z
+c       rahaman 2017-03-31: The optimized kernels (e.g.nek_kernel16.cuf)
+c       called synchthreads after each strided access.  I don't believe
+c       this is necessary.  When I omit the thread sync, I see no
+c       runtime erros and the solution matches CPU version
+c       call syncthreads()
       enddo
-      ur(i,j,k+8,e) = gxyz(i,j,k+8,1,e)*rtmp
-     $              + gxyz(i,j,k+8,2,e)*stmp
-     $              + gxyz(i,j,k+8,3,e)*ttmp
-      us(i,j,k+8,e) = gxyz(i,j,k+8,2,e)*rtmp
-     $              + gxyz(i,j,k+8,4,e)*stmp
-     $              + gxyz(i,j,k+8,5,e)*ttmp
-      ut(i,j,k+8,e) = gxyz(i,j,k+8,3,e)*rtmp
-     $              + gxyz(i,j,k+8,5,e)*stmp
-     $              + gxyz(i,j,k+8,6,e)*ttmp
-      call syncthreads()
-
-
-      rtmp = 0.0
-      stmp = 0.0
-      ttmp = 0.0
-      do l=1,lx1
-        rtmp = rtmp + shdxm1(i,l)   * u(l,j,k+4,e)
-        stmp = stmp + shdxm1(j,l)   * u(i,l,k+4,e)
-        ttmp = ttmp + shdxm1(k+4,l) * u(i,j,l,e)
-      enddo
-      ur(i,j,k+4,e) = gxyz(i,j,k+4,1,e)*rtmp
-     $              + gxyz(i,j,k+4,2,e)*stmp
-     $              + gxyz(i,j,k+4,3,e)*ttmp
-      us(i,j,k+4,e) = gxyz(i,j,k+4,2,e)*rtmp
-     $              + gxyz(i,j,k+4,4,e)*stmp
-     $              + gxyz(i,j,k+4,5,e)*ttmp
-      ut(i,j,k+4,e) = gxyz(i,j,k+4,3,e)*rtmp
-     $              + gxyz(i,j,k+4,5,e)*stmp
-     $              + gxyz(i,j,k+4,6,e)*ttmp
-      call syncthreads()
-
-
-      rtmp = 0.0
-      stmp = 0.0
-      ttmp = 0.0
-      do l=1,lx1
-        rtmp = rtmp + shdxm1(i,l) * u(l,j,k,e)
-        stmp = stmp + shdxm1(j,l) * u(i,l,k,e)
-        ttmp = ttmp + shdxm1(k,l) * u(i,j,l,e)
-      enddo
-
-      ur(i,j,k,e) = gxyz(i,j,k,1,e)*rtmp
-     $            + gxyz(i,j,k,2,e)*stmp
-     $            + gxyz(i,j,k,3,e)*ttmp
-      us(i,j,k,e) = gxyz(i,j,k,2,e)*rtmp
-     $            + gxyz(i,j,k,4,e)*stmp
-     $            + gxyz(i,j,k,5,e)*ttmp
-      ut(i,j,k,e) = gxyz(i,j,k,3,e)*rtmp
-     $            + gxyz(i,j,k,5,e)*stmp
-     $            + gxyz(i,j,k,6,e)*ttmp
-
-      call syncthreads()
-      wijke = 0.0
-      do l=1,lx1
-        wijke = wijke + shdxtm1(i,l)*ur(l,j,k,e) 
-     $                + shdxtm1(j,l)*us(i,l,k,e)
-     $                + shdxtm1(k,l)*ut(i,j,l,e)
-      enddo
-      w(i,j,k,e) = wijke
-
-
-      call syncthreads()
-      wijke = 0.0
-      do l=1,lx1
-        wijke = wijke + shdxtm1(i,l)*ur(l,j,k+4,e) 
-     $                + shdxtm1(j,l)*us(i,l,k+4,e)
-     $                + shdxtm1(k+4,l)*ut(i,j,l,e)
-      enddo
-      w(i,j,k+4,e) = wijke
-
-      call syncthreads()
-      wijke = 0.0
-      do l=1,lx1
-        wijke = wijke + shdxtm1(i,l)*ur(l,j,k+8,e) 
-     $                + shdxtm1(j,l)*us(i,l,k+8,e)
-     $                + shdxtm1(k+8,l)*ut(i,j,l,e)
-      enddo
-      w(i,j,k+8,e) = wijke
-
-      call syncthreads()
-      wijke = 0.0
-      do l=1,lx1
-        wijke = wijke + shdxtm1(i,l)*ur(l,j,k+12,e) 
-     $                + shdxtm1(j,l)*us(i,l,k+12,e)
-     $                + shdxtm1(k+12,l)*ut(i,j,l,e)
-      enddo
-      w(i,j,k+12,e) = wijke
 
       return
       end
