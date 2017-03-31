@@ -424,24 +424,22 @@ c-----------------------------------------------------------------------
 
 #ifdef _CUDA
 
-!$acc host_data use_device(w,u(:,:,:,:),ur,us,ut,gxyz,dxm1,dxtm1)
-       if (nx1.eq.10) then
+!$ACC HOST_DATA USE_DEVICE(w,u(:,:,:,:),ur,us,ut,gxyz,dxm1,dxtm1)
+       if (nx1.le.10) then
          call ax_cuf2<<<nelt,dim3(nx1,ny1,nz1)>>>(w,u,
      $                ur,us,ut,gxyz,dxm1,dxtm1)
        else if (nx1.eq.12) then
          call ax_cuf2<<<nelt,dim3(nx1,ny1,nz1/2)>>>(w,u,
      $                ur,us,ut,gxyz,dxm1,dxtm1)
        else
-c         call ax_cuf2<<<nelt,dim3(nx1,ny1,nz1/4)>>>(w,u,
-c     $                ur,us,ut,gxyz,dxm1,dxtm1)
          call ax_cuf2<<<nelt,dim3(nx1,ny1,nz1/4)>>>(w,u,
      $         ur,us,ut,gxyz,dxm1,dxtm1) 
        endif
-       
+!$ACC END HOST_DATA
+
        cuda_err = cudaGetLastError()
        if (cuda_err /= cudaSuccess) then
          write(6, 815) cuda_err, cudaGetErrorString(cuda_err)
-  815    format('CUDA ERROR', I3, ': ', A)
          call exitt
        endif
 
@@ -453,7 +451,7 @@ c     $                ur,us,ut,gxyz,dxm1,dxtm1)
          call exitt
        endif
 
-!$acc end host_data
+  815    format('CUDA ERROR', I3, ': ', A)
 
 #else
 c ifndef _CUDA
