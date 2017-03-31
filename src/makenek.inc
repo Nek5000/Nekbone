@@ -152,11 +152,11 @@ fi
 
 # assign F77 compiler specific flags
 case $F77comp in
-  *pgf*)        P="-r8 -Mpreprocess"
+  *pgf*)        P="-r8 -Mpreprocess -Mfixed"
                ;;
-  *gfortran*)   P="-fdefault-real-8 -x f77-cpp-input"
+  *gfortran*)   P="-fdefault-real-8 -cpp -fixed-form"
                ;;
-  *ifort*)      P="-r8 -fpconstant -fpp"
+  *ifort*)      P="-r8 -fpconstant -fpp -fixed"
                ;;
   *pathf*)      P="-r8 -cpp -fno-second-underscore"
                ;;
@@ -176,31 +176,11 @@ case $F77comp in
       echo "        - don't know how to invoke the C pre-processor (CPP) before compilation"
       echo "       Please edit the makefile and specify the requested compiler flags using the P variable."
       echo ""
-
       P="<specify your compiler flags here>"
       NOCOMPILE=1
       read;;
 esac
 export PPPO
-
-# OpenACC
-if [ "$IFPGIACC" == "true" -o "$IFCRAYACC" == "true" ]; then
-  if [ "$IFPGIACC" == "true" ]; then
-     #PGI compiler
-     PPLIST="${PPLIST} PGI_ACC "
-     P="${P} -acc -Minfo=accel"
-     USR_LFLAGS="${USR_LFLAGS} -ta=nvidia"
-  else
-     # Cray compiler
-     PPLIST="${PPLIST} CRAY_ACC"
-     P="${P} -hacc "
-  fi
-else
-  # default
-  IFPGIACC=false
-  IFCRAYACC=false
-fi
-
 
 # set preprocessor symbols
 if [ "$IFMPI" == "false" -o "$IFMPI" == "no" ]; then
@@ -291,25 +271,25 @@ fi
 echo "generating makefile ..."
 rm -rf makefile 2>/dev/null
 
-sed -e "s:^F77[ ]*=.*:F77\:=$F77:" \
--e "s:^CC[ ]*=.*:CC\:=$CC:" \
--e "s:^G[ ]*=.*:G\:=$G:" \
--e "s:^OPT_FLAGS[ ]*=.*:OPT_FLAGS\:=$OPT_FLAGS:" \
--e "s/^P[ ]*=.*/P:=$P/" \
--e "s/^L0[ ]*=.*/L0=$L0/" \
--e "s/^L2[ ]*=.*/L2=$L2/" \
--e "s/^L3[ ]*=.*/L3=$L3/" \
--e "s/^L4[ ]*=.*/L4=$L4/" \
--e "s/^PPPO[ ]*=.*/PPPO=$PPPO/" \
--e "s/^PPS[ ]*=.*/PPS=$PPLIST/" \
--e "s/^IFNEKCOMM[ ]*=.*/IFNEKCOMM:=$IFNEKCOMM/" \
--e "s/^IFNEKDLAY[ ]*=.*/IFNEKDLAY:=$IFNEKDLAY/" \
--e "s/^IFMGRID[ ]*=.*/IFMGRID:=$IFMGRID/" \
--e "s/^IFMPI[ ]*=.*/IFMPI:=$IFMPI/" \
--e "s:^MXM[ ]*=.*:MXM=$MXM_USER:" \
--e "s:^USR[ ]*=.*:USR\:=$USR:" \
--e "s:^USR_LFLAGS[ ]*=.*:USR_LFLAGS\:=$USR_LFLAGS:" \
--e "s:^S[ ]*=.*:S\:=${SOURCE_ROOT}:"  $SOURCE_ROOT/makefile.template >.makefile
+sed -e "s?^F77[ ]*=.*?F77\:=$F77?" \
+-e "s?^CC[ ]*=.*?CC\:=$CC?" \
+-e "s?^G[ ]*=.*?G\:=$G?" \
+-e "s?^OPT_FLAGS[ ]*=.*?OPT_FLAGS\:=$OPT_FLAGS?" \
+-e "s?^P[ ]*=.*?P:=$P?" \
+-e "s?^L0[ ]*=.*?L0=$L0?" \
+-e "s?^L2[ ]*=.*?L2=$L2?" \
+-e "s?^L3[ ]*=.*?L3=$L3?" \
+-e "s?^L4[ ]*=.*?L4=$L4?" \
+-e "s?^PPPO[ ]*=.*?PPPO=$PPPO?" \
+-e "s?^PPS[ ]*=.*?PPS=$PPLIST?" \
+-e "s?^IFNEKCOMM[ ]*=.*?IFNEKCOMM:=$IFNEKCOMM?" \
+-e "s?^IFNEKDLAY[ ]*=.*?IFNEKDLAY:=$IFNEKDLAY?" \
+-e "s?^IFMGRID[ ]*=.*?IFMGRID:=$IFMGRID?" \
+-e "s?^IFMPI[ ]*=.*?IFMPI:=$IFMPI?" \
+-e "s?^MXM[ ]*=.*?MXM=$MXM_USER?" \
+-e "s?^USR[ ]*=.*?USR\:=$USR?" \
+-e "s?^USR_LFLAGS[ ]*=.*?USR_LFLAGS\:=$USR_LFLAGS?" \
+-e "s?^S[ ]*=.*?S\:=${SOURCE_ROOT}?"  $SOURCE_ROOT/makefile.template >.makefile
 
 echo $G | grep '\-g' 1>/dev/null
 if [ $? -eq 0 ]; then
