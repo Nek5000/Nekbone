@@ -30,10 +30,10 @@ CC="mpicc"
 #USR="foo.o"
 
 # linking flags
-USR_LFLAGS="-ta=nvidia:cc60"
+USR_LFLAGS="-ta=nvidia:cc50,cc60"
 
 # generic compiler flags
-G="-acc -Minfo=accel -ta=nvidia:cc60"
+G="-acc -Minfo=accel -ta=nvidia:cc50,cc60"
 
 # optimization flags
 #OPT_FLAGS_STD=""
