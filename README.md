@@ -15,7 +15,7 @@ solver. This includes a pure OpenACC implementation as well as a hybrid
 OpenACC/CUDA implementation with a CUDA kernel for matrix-vector
 multiplication.  This implementation can also be compiled with without OpenACC
 or CUDA.  These implementations were tested with the nek\_cuf16 example in
-`tests/nek_cuf16`.  They were also tested with the PGI compilers.  
+`tests/nek_gpu1`.  They were also tested with the PGI compilers.  
 
 ### Compiling the nek\_cuf16 example
 
@@ -41,7 +41,7 @@ makenek.
 To use the compilation scripts (for example, with OpenACC only):
 
 ```
-$ cd test/nek_cuf16
+$ cd test/nek_gpu1
 $ ./makenek.acc clean
 $ ./makenek.acc
 ```
@@ -64,7 +64,7 @@ format.
 
 ### Testing
 
-The `tests/nek_cuf16/scripts/` folder contains simple scripts for comparing
+The `tests/nek_gpu1/scripts/` folder contains simple scripts for comparing
 results from the different implementations:
 * `compare_mpi_master.sh`: Runs and compares MPI solution to reference solution
   from the Nekbone master branch
@@ -78,7 +78,7 @@ results from the different implementations:
 To use them:
 
 ```
-$ cd test/nek_cuf16
+$ cd test/nek_gpu1
 $ scripts/compare_acc_master.sh
 ```
 
