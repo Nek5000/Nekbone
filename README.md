@@ -17,7 +17,7 @@ multiplication.  This implementation can also be compiled with without OpenACC
 or CUDA.  These implementations were tested with the nek\_cuf16 example in
 `tests/nek_gpu1`.  They were also tested with the PGI compilers.  
 
-### Compiling the nek\_cuf16 example
+### Compiling the nek\_gpu1 example
 
 The nek\_cuf16 example contains three makenek scripts to compile Nekbone with
 various configurations:
@@ -49,7 +49,7 @@ $ ./makenek.acc
 The clean step is necessary if you are switching between MPI, OpenACC, and
 OpenACC/CUDA builds.  
 
-### Running
+### Running nek\_gpu1
 
 Successful compilation will produce an executable called `nekbone`.  You may
 run the executable through an MPI process manager, for example:
@@ -62,7 +62,7 @@ The `data` argument specifies that you will be using the runtime settings from
 `data.rea`.  See `USERGUIDE.pdf` for a detailed description of the `.rea` file
 format.
 
-### Testing
+### Testing nek\_gpu1
 
 The `tests/nek_gpu1/scripts/` folder contains simple scripts for comparing
 results from the different implementations:
@@ -82,22 +82,8 @@ $ cd test/nek_gpu1
 $ scripts/compare_acc_master.sh
 ```
 
-### Modifying the problem setup
+### Modifying nek\_gpu1
 
-The `SIZE` and `data.rea` files contain information about setting-up and
-running the tes problem.  See `USERGUIDE.pdf` for detailed information about
-modifying these files.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+The `nek_gpu1` problem is setup for 256 elements and a polynomial order of 16.
+You may alter this setup in the SIZE` and `data.rea` files as described in
+`USERGUIDE.pdf`.  
