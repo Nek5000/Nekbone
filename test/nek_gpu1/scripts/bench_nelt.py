@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
 size_template = \
 """C     Dimension file to be included
@@ -6,7 +6,7 @@ size_template = \
       parameter (ldim=3)                      ! dimension
       parameter (lx1={lx1},ly1=lx1,lz1=lx1)      ! polynomial order
 
-      parameter (lp = 10)                     ! max number of processors
+      parameter (lp = {lp})                     ! max number of processors
       parameter (lelt={lelt})                    ! max number of elements, per proc
 
       parameter (lelg=lelt*lp)                ! max total elements in a test
@@ -19,9 +19,9 @@ size_template = \
 """
 
 rea_template = \
-""".true.    = ifbrick                  ! brick or linear geometry
-{lelt} {lelt} 1 = iel0,ielN(per proc),stride ! range of number of elements per proc.
-{lx1} {lx1}  1 = nx0,nxN,stride           ! poly. order range for nx1
+""".false.    = ifbrick                  ! brick or linear geometry
+{nelt} {nelt} 1 = iel0,ielN(per proc),stride ! range of number of elements per proc.
+{nx1} {nx1}  1 = nx0,nxN,stride           ! poly. order range for nx1
 0    0  0 = npx,npy,npz              ! np distrb, if != np, nekbone handle
 0    0  0 = mx,my,mz                 ! nelt distrb, if != nelt, nekbone handle
 """
@@ -38,46 +38,88 @@ if __name__ == '__main__':
 
     import os
     from subprocess import check_call, STDOUT
+    from datetime import datetime
 
-    logdir = 'logs'
-    os.makedirs(logdir, exist_ok=True)
+    # =============================================================================================
+    # SETUP PHASES
+    # =============================================================================================
 
+    # Make directory for logfiles
+    logdir = 'logs.{0}'.format(datetime.now().isoformat())
+    if not os.path.exists(logdir):
+        os.makedirs(logdir)
+
+    # Make the SIZE file
+    with open('SIZE', 'w') as f:
+        f.write(size_template.format(lx1=16, lelt=2048, lp=16))
+
+    # Print the header
     print('mode,\tnx1,\tnelt,\ttime,')
 
-    for mode in ['mpi', 'acc', 'cuda']:
+    # =============================================================================================
+    # TEST PHASES
+    # =============================================================================================
 
-        for lx1 in [8, 16]:
+    for mode in ['serial', 'mpi', 'acc', 'cuda']:
 
-            for lelt in [2**n for n in range(12)]:
+        # -----------------------------------------------------------------------------------------
+        # Compilation phase
+        # -----------------------------------------------------------------------------------------
 
-                nb_make_input(lx1=lx1, lelt=lelt)
+        if mode == 'serial':
+            makenek = './makenek.mpi'
+        else:
+            makenek = './makenek.{0}'.format(mode)
 
-                makenek = './makenek.{0}'.format(mode)
-                makeOutFile = os.path.join(logdir,
-                    'make.{0}.nx1_{1}.nelt_{2}.output'.format(mode, lx1, lelt))
+        makeOutFile = os.path.join(logdir, 'make.{0}.output'.format(mode))
 
-                with open(makeOutFile, 'w') as makeOut:
-                    check_call([makenek, 'data', '-nocompile'], stdout=makeOut, stderr=STDOUT)
-                    check_call(['make', '-f', 'makefile', 'clean'], stdout=makeOut, stderr=STDOUT)
-                    check_call(['make', '-f', 'makefile'], stdout=makeOut, stderr=STDOUT)
+        with open(makeOutFile, 'w') as makeOut:
+            check_call([makenek, 'data', '-nocompile'], stdout=makeOut, stderr=STDOUT)
+            check_call(['make', '-f', 'makefile', 'clean'], stdout=makeOut, stderr=STDOUT)
+            check_call(['make', '-f', 'makefile'], stdout=makeOut, stderr=STDOUT)
 
-                times = []
-                numReps = 3
+        # -----------------------------------------------------------------------------------------
+        # Run phases
+        # -----------------------------------------------------------------------------------------
 
-                for rep in range(1, numReps+1):
+        for nx1 in [8, 16]:
+            for nelt in [2**n for n in range(12)]:
 
-                    runOutFile = os.path.join(logdir, 
-                        'run.{0}.nx1_{1}.nelt_{2}.rep_{3}.output'.format(mode, lx1, lelt, rep))
-                    runErrFile = os.path.join(logdir,
-                        'run.{0}.nx1_{1}.nelt_{2}.rep_{3}.error'.format(mode, lx1, lelt, rep))
+                # Construct the .rea file for these nx1, nelt, np settings
+                if mode == 'mpi':
+                    numProcs = 16
+                else:
+                    numProcs = 1
 
-                    with open(runOutFile, 'w') as runOut, open(runErrFile, 'w') as runErr:
-                        check_call(['mpiexec', '-n', '1', './nekbone', 'data'], stdout=runOut, stderr=runErr)
+                if numProcs > nelt:
+                    print('{0},\t{1},\t{2},\t{3}'.format(mode, nx1, nelt, ''))
+                else:
 
-                    with open(runOutFile, 'r') as runOut:
-                        for l in runOut:
-                            if 'Solve Time' in l:
-                                times.append(float(l.strip().split()[-1]))
+                    with open('data.rea', 'w') as f:
+                        f.write(rea_template.format(nx1=nx1, nelt=nelt/numProcs))
 
-                print('{0},\t{1},\t{2},\t{3},'.format(mode, lx1, lelt, sum(times)/numReps))
+                    times = []
+                    numReps = 3
+
+                    for rep in range(1, numReps+1):
+
+                        # Name the logfiles
+                        runOutFile = os.path.join(logdir, 
+                                'run.{0}.nx1_{1}.nelt_{2}.rep_{3}.output'.format(mode, nx1, nelt, rep))
+                        runErrFile = os.path.join(logdir,
+                                'run.{0}.nx1_{1}.nelt_{2}.rep_{3}.error'.format(mode, nx1, nelt, rep))
+
+                        # DO THE RUN!
+                        with open(runOutFile, 'w') as runOut, open(runErrFile, 'w') as runErr:
+                            check_call(['mpiexec', '-np', str(numProcs), '-bind-to', 'numa', './nekbone', 'data'], 
+                                    stdout=runOut, stderr=runErr)
+
+                        # Grep the output
+                        with open(runOutFile, 'r') as runOut:
+                            for l in runOut:
+                                if 'Solve Time' in l:
+                                    times.append(float(l.strip().split()[-1]))
+
+                    # Print results to stdout
+                    print('{0},\t{1},\t{2},\t{3}'.format(mode, nx1, nelt, sum(times)/numReps))
 
