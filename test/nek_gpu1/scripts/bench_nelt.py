@@ -54,7 +54,7 @@ if __name__ == '__main__':
         f.write(size_template.format(lx1=16, lelt=2048, lp=16))
 
     # Print the header
-    print('mode,\tnx1,\tnelt,\ttime,')
+    print('mode,\tnx1,\tnelt,\ttime,\tMflops')
 
     # =============================================================================================
     # TEST PHASES
@@ -92,13 +92,14 @@ if __name__ == '__main__':
                     numProcs = 1
 
                 if numProcs > nelt:
-                    print('{0},\t{1},\t{2},\t{3}'.format(mode, nx1, nelt, ''))
+                    print('{0},\t{1},\t{2},\t{3},\t{4}'.format(mode, nx1, nelt, '', ''))
                 else:
 
                     with open('data.rea', 'w') as f:
                         f.write(rea_template.format(nx1=nx1, nelt=nelt/numProcs))
 
                     times = []
+                    flops = []
                     numReps = 3
 
                     for rep in range(1, numReps+1):
@@ -119,7 +120,10 @@ if __name__ == '__main__':
                             for l in runOut:
                                 if 'Solve Time' in l:
                                     times.append(float(l.strip().split()[-1]))
+                                elif 'Tot MFlops' in l:
+                                    flops.append(float(l.strip().split()[3].strip(',')))
 
                     # Print results to stdout
-                    print('{0},\t{1},\t{2},\t{3}'.format(mode, nx1, nelt, sum(times)/numReps))
+                    print('{0},\t{1},\t{2},\t{3:0.4E},\t{4:0.4E}'.format(mode, nx1, nelt, 
+                        sum(times)/numReps, sum(flops)/numReps))
 
