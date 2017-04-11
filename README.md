@@ -90,7 +90,9 @@ You may alter this setup in the SIZE` and `data.rea` files as described in
 
 
 ### References
-   [1] Jing Gong, Stefano Markidis, Erwin Laure, Matthew Otten, Paul F. Fischer, Misun Min,
+```
+[1] Jing Gong, Stefano Markidis, Erwin Laure, Matthew Otten, Paul F. Fischer, Misun Min,
 Nekbone performance on GPUs with OpenACC and CUDA Fortran implementations, The jounral of Supercomputing, Vol. 72, pp. 4160-4180, 2016.
 
-   [2] Matthew Otten, Jing Gong, Azamat Mametjanov, Aaron Vose, John Levesque, Paul Fischer, and Misun Min, An MPI/OpenACC implementation of a high order electromagnetics solver with GPUDirect communication, The International Journal of High Performance Computing Application, Vol. 30, No. 3, pp. 320-334, 2016. 
+[2] Matthew Otten, Jing Gong, Azamat Mametjanov, Aaron Vose, John Levesque, Paul Fischer, and Misun Min, An MPI/OpenACC implementation of a high order electromagnetics solver with GPUDirect communication, The International Journal of High Performance Computing Application, Vol. 30, No. 3, pp. 320-334, 2016. 
+```
