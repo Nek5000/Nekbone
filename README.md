@@ -12,14 +12,14 @@ CUDA/OpenACC Branch
 
 The CUDA/OpenACC branch contains GPU implementations of the conjugate gradient
 solver. This includes a pure OpenACC implementation as well as a hybrid
-OpenACC/CUDA implementation with a CUDA kernel for matrix-vector
-multiplication.  This implementation can also be compiled with without OpenACC
-or CUDA.  These implementations were tested with the nek\_cuf16 example in
-`tests/nek_gpu1`.  They were also tested with the PGI compilers.  
+OpenACC/CUDA implementation with a CUDA kernel for matrix-vector multiplication 
+based on previous works [1][2].  This implementation can also be compiled with 
+without OpenACC or CUDA.  These implementations were tested with the nek\_gpu1
+example in `tests/nek_gpu1`.  They were also tested with the PGI compilers.  
 
 ### Compiling the nek\_gpu1 example
 
-The nek\_cuf16 example contains three makenek scripts to compile Nekbone with
+The nek\_gpu1 example contains three makenek scripts to compile Nekbone with
 various configurations:
 
 * `makenek.mpi`: MPI only, without OpenACC or CUDA
