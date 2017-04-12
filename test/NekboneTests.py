@@ -130,10 +130,6 @@ class NekboneTestCase(unittest.TestCase):
             ])
             self.assertEqual(testLine, refLine, msg=errMsg)
 
-
-class NekboneGpu1(NekboneTestCase):
-    testDir = os.path.join(os.getcwd(), 'nek_gpu1')
-
     def test_AccDevice(self):
         testMode = 'acc.device'
 
@@ -155,29 +151,23 @@ class NekboneGpu1(NekboneTestCase):
         self.runNekboneSerial(mode=testMode, cwd=self.__class__.testDir, reaFile='data')
 
         self.assertOutputEqual(testMode=testMode, refMode='serial')
+
+
+class NekboneGpu1(NekboneTestCase):
+    testDir = os.path.join(os.getcwd(), 'nek_gpu1')
 
 
 class NekboneExample1(NekboneTestCase):
     testDir = os.path.join(os.getcwd(), 'example1')
 
-    def test_AccDevice(self):
-        testMode = 'acc.device'
 
-        self.makeNekbone(mode=testMode, cwd=self.__class__.testDir,
-                         f77='pgfortran', cc='pgcc', ifmpi='false', usr_lflags='-ta=nvidia:cc50',
-                         g='-acc -Minfo=accel -ta=nvidia:cc50')
+class NekboneExample2(NekboneTestCase):
+    testDir = os.path.join(os.getcwd(), 'example2')
 
-        self.runNekboneSerial(mode=testMode, cwd=self.__class__.testDir, reaFile='data')
 
-        self.assertOutputEqual(testMode=testMode, refMode='serial')
+class NekboneExample3(NekboneTestCase):
+    testDir = os.path.join(os.getcwd(), 'example3')
 
-    def test_AccHost(self):
-        testMode = 'acc.host'
 
-        self.makeNekbone(mode=testMode, cwd=self.__class__.testDir,
-                         f77='pgfortran', cc='pgcc', ifmpi='false', usr_lflags='-ta=host',
-                         g='-acc -Minfo=accel -ta=host')
-
-        self.runNekboneSerial(mode=testMode, cwd=self.__class__.testDir, reaFile='data')
-
-        self.assertOutputEqual(testMode=testMode, refMode='serial')
+#class NekboneMgrid(NekboneTestCase):
+#    testDir = os.path.join(os.getcwd(), 'nek_mgrid')
