@@ -1,4 +1,4 @@
-import os, stat, unittest
+import os, stat, sys, unittest
 from subprocess import check_call, STDOUT
 
 makenekTemplate = \
@@ -83,37 +83,31 @@ class NekboneTestCase(unittest.TestCase):
 
 
         with open(makeOutFile, 'w') as makeOut:
-            check_call([makenek, 'data', '-nocompile'], cwd=cwd, stdout=makeOut, stderr=STDOUT)
-            check_call(['make', '-f', 'makefile', 'clean'], cwd=cwd, stdout=makeOut, stderr=STDOUT)
-            check_call(['make', '-f', 'makefile'], cwd=cwd, stdout=makeOut, stderr=STDOUT)
+            check_call([makenek, 'data', '-nocompile'], cwd=cwd, stdout=makeOut, stderr=sys.stderr)
+            check_call(['make', '-f', 'makefile', 'clean'], cwd=cwd, stdout=makeOut, stderr=sys.stderr)
+            check_call(['make', '-f', 'makefile'], cwd=cwd, stdout=makeOut, stderr=sys.stderr)
 
 
     @staticmethod
     def runNekboneSerial(mode, cwd=None, reaFile='data'):
 
         runOutFile = 'run.{0}.output'.format(mode)
-        runErrFile = 'run.{0}.error'.format(mode)
-
         if cwd:
             runOutFile = os.path.join(cwd, runOutFile)
-            runErrFile = os.path.join(cwd, runErrFile)
 
-        with open(runOutFile, 'w') as runOut, open(runErrFile, 'w') as runErr:
-            check_call(['./nekbone', reaFile], cwd=cwd, stdout=runOut, stderr=runErr)
+        with open(runOutFile, 'w') as runOut:
+            check_call(['./nekbone', reaFile], cwd=cwd, stdout=runOut, stderr=sys.stderr)
 
 
     @staticmethod
     def runNekboneParallel(mode, cwd=None, nProcs=2, reaFile='data'):
 
         runOutFile = 'run.{0}.output'.format(mode)
-        runErrFile = 'run.{0}.error'.format(mode)
-
         if cwd:
             runOutFile = os.path.join(cwd, runOutFile)
-            runErrFile = os.path.join(cwd, runErrFile)
 
-        with open(runOutFile, 'w') as runOut, open(runErrFile, 'w') as runErr:
-            check_call(['mpirun', '-n', nProcs, './nekbone', reaFile], cwd=cwd, stdout=runOut, stderr=runErr)
+        with open(runOutFile, 'w') as runOut:
+            check_call(['mpirun', '-n', nProcs, './nekbone', reaFile], cwd=cwd, stdout=runOut, stderr=sys.stderr)
 
 
     @classmethod
@@ -141,10 +135,6 @@ class NekboneTestCase(unittest.TestCase):
                 '{testMode}:', testLine,
             ])
             self.assertEqual(testLine, refLine, msg=errMsg)
-
-
-
-
 
 
 
