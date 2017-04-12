@@ -81,9 +81,9 @@ class NekboneTestCase(unittest.TestCase):
                  stat.S_IWUSR)
 
         with open(makeOutFile, 'w') as makeOut:
-            check_call([makenek, 'data', '-nocompile'], cwd=cwd, stdout=makeOut, stderr=sys.stderr)
-            check_call(['make', '-f', 'makefile', 'clean'], cwd=cwd, stdout=makeOut, stderr=sys.stderr)
-            check_call(['make', '-f', 'makefile'], cwd=cwd, stdout=makeOut, stderr=sys.stderr)
+            check_call([makenek, 'data', '-nocompile'], cwd=cwd, stdout=makeOut)
+            check_call(['make', '-f', 'makefile', 'clean'], cwd=cwd, stdout=makeOut)
+            check_call(['make', '-f', 'makefile'], cwd=cwd, stdout=makeOut)
 
     @staticmethod
     def runNekboneSerial(mode, cwd=None, reaFile='data'):
@@ -93,7 +93,7 @@ class NekboneTestCase(unittest.TestCase):
             runOutFile = os.path.join(cwd, runOutFile)
 
         with open(runOutFile, 'w') as runOut:
-            check_call(['./nekbone', reaFile], cwd=cwd, stdout=runOut, stderr=sys.stderr)
+            check_call(['./nekbone', reaFile], cwd=cwd, stdout=runOut)
 
     @staticmethod
     def runNekboneParallel(mode, cwd=None, nProcs=2, reaFile='data'):
@@ -103,7 +103,7 @@ class NekboneTestCase(unittest.TestCase):
             runOutFile = os.path.join(cwd, runOutFile)
 
         with open(runOutFile, 'w') as runOut:
-            check_call(['mpirun', '-n', nProcs, './nekbone', reaFile], cwd=cwd, stdout=runOut, stderr=sys.stderr)
+            check_call(['mpirun', '-n', nProcs, './nekbone', reaFile], cwd=cwd, stdout=runOut)
 
     @classmethod
     def setUpClass(cls):
