@@ -59,10 +59,9 @@ make -f makefile 2>&1 | tee compiler.out
 exit 0
 """
 
+
 class NekboneTestCase(unittest.TestCase):
-
     testDir = None
-
 
     @staticmethod
     def makeNekbone(mode, cwd=None, f77='pgfortran', cc='pgcc', ifmpi='false', usr_lflags='', g=''):
@@ -81,12 +80,10 @@ class NekboneTestCase(unittest.TestCase):
                  stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH |
                  stat.S_IWUSR)
 
-
         with open(makeOutFile, 'w') as makeOut:
             check_call([makenek, 'data', '-nocompile'], cwd=cwd, stdout=makeOut, stderr=sys.stderr)
             check_call(['make', '-f', 'makefile', 'clean'], cwd=cwd, stdout=makeOut, stderr=sys.stderr)
             check_call(['make', '-f', 'makefile'], cwd=cwd, stdout=makeOut, stderr=sys.stderr)
-
 
     @staticmethod
     def runNekboneSerial(mode, cwd=None, reaFile='data'):
@@ -98,7 +95,6 @@ class NekboneTestCase(unittest.TestCase):
         with open(runOutFile, 'w') as runOut:
             check_call(['./nekbone', reaFile], cwd=cwd, stdout=runOut, stderr=sys.stderr)
 
-
     @staticmethod
     def runNekboneParallel(mode, cwd=None, nProcs=2, reaFile='data'):
 
@@ -109,19 +105,17 @@ class NekboneTestCase(unittest.TestCase):
         with open(runOutFile, 'w') as runOut:
             check_call(['mpirun', '-n', nProcs, './nekbone', reaFile], cwd=cwd, stdout=runOut, stderr=sys.stderr)
 
-
     @classmethod
     def setUpClass(cls):
 
         cls.makeNekbone(mode='serial', cwd=cls.testDir, f77='pgfortran', cc='pgcc', ifmpi='false', usr_lflags='', g='')
         cls.runNekboneSerial(mode='serial', cwd=cls.testDir, reaFile='data')
 
-
     def assertOutputEqual(self, testMode, refMode='serial'):
         cwd = self.__class__.testDir
 
         testOutFile = os.path.join(cwd, 'run.{0}.output'.format(testMode))
-        with open(testOutFile , 'r') as f:
+        with open(testOutFile, 'r') as f:
             testOutList = [l.strip() for l in f if l.startswith('cg:')]
 
         refOutFile = os.path.join(cwd, 'run.{0}.output'.format(refMode))
@@ -137,13 +131,10 @@ class NekboneTestCase(unittest.TestCase):
             self.assertEqual(testLine, refLine, msg=errMsg)
 
 
-
 class NekboneGpu1(NekboneTestCase):
-
     testDir = os.path.join(os.getcwd(), 'nek_gpu1')
 
     def test_AccDevice(self):
-
         testMode = 'acc.device'
 
         self.makeNekbone(mode=testMode, cwd=self.__class__.testDir,
@@ -154,9 +145,7 @@ class NekboneGpu1(NekboneTestCase):
 
         self.assertOutputEqual(testMode=testMode, refMode='serial')
 
-
     def test_AccHost(self):
-
         testMode = 'acc.host'
 
         self.makeNekbone(mode=testMode, cwd=self.__class__.testDir,
@@ -167,9 +156,7 @@ class NekboneGpu1(NekboneTestCase):
 
         self.assertOutputEqual(testMode=testMode, refMode='serial')
 
-
     def test_AccMulticore(self):
-
         testMode = 'acc.multicore'
 
         self.makeNekbone(mode=testMode, cwd=self.__class__.testDir,
@@ -179,4 +166,3 @@ class NekboneGpu1(NekboneTestCase):
         self.runNekboneSerial(mode=testMode, cwd=self.__class__.testDir, reaFile='data')
 
         self.assertOutputEqual(testMode=testMode, refMode='serial')
-
