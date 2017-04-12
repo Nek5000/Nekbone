@@ -156,12 +156,27 @@ class NekboneGpu1(NekboneTestCase):
 
         self.assertOutputEqual(testMode=testMode, refMode='serial')
 
-    def test_AccMulticore(self):
-        testMode = 'acc.multicore'
+
+class NekboneExample1(NekboneTestCase):
+    testDir = os.path.join(os.getcwd(), 'example1')
+
+    def test_AccDevice(self):
+        testMode = 'acc.device'
 
         self.makeNekbone(mode=testMode, cwd=self.__class__.testDir,
-                         f77='pgfortran', cc='pgcc', ifmpi='false', usr_lflags='-ta=multicore',
-                         g='-acc -Minfo=accel -ta=multicore')
+                         f77='pgfortran', cc='pgcc', ifmpi='false', usr_lflags='-ta=nvidia:cc50',
+                         g='-acc -Minfo=accel -ta=nvidia:cc50')
+
+        self.runNekboneSerial(mode=testMode, cwd=self.__class__.testDir, reaFile='data')
+
+        self.assertOutputEqual(testMode=testMode, refMode='serial')
+
+    def test_AccHost(self):
+        testMode = 'acc.host'
+
+        self.makeNekbone(mode=testMode, cwd=self.__class__.testDir,
+                         f77='pgfortran', cc='pgcc', ifmpi='false', usr_lflags='-ta=host',
+                         g='-acc -Minfo=accel -ta=host')
 
         self.runNekboneSerial(mode=testMode, cwd=self.__class__.testDir, reaFile='data')
 
