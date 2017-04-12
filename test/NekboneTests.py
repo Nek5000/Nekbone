@@ -152,6 +152,17 @@ class NekboneTestCase(unittest.TestCase):
 
         self.assertOutputEqual(testMode=testMode, refMode='serial')
 
+    def test_CudaDevice(self):
+        testMode = 'cuda.device'
+
+        self.makeNekbone(mode=testMode, cwd=self.__class__.testDir,
+                         f77='pgfortran', cc='pgcc', ifmpi='false', usr_lflags='-Mcuda=cc50 -ta=nvidia:cc50',
+                         g='-acc -Minfo=accel -Mcuda=cc50 -ta=nvidia:cc50')
+
+        self.runNekboneSerial(mode=testMode, cwd=self.__class__.testDir, reaFile='data')
+
+        self.assertOutputEqual(testMode=testMode, refMode='serial')
+
 
 class NekboneGpu1(NekboneTestCase):
     testDir = os.path.join(os.getcwd(), 'nek_gpu1')
