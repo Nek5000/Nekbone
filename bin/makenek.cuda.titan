@@ -56,6 +56,5 @@ fi
 # do some checks and create makefile
 source $SOURCE_ROOT/makenek.inc
 # compile
-# make -j4 -f makefile 2>&1 | tee compiler.out
 make -f makefile 2>&1 | tee compiler.out
 exit 0
