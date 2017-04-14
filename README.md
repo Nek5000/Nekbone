@@ -118,7 +118,7 @@ $ cp ../../bin/makenek.cuda.titan .
 $ cp ../../bin/nekpgpu.titan .
 $ ./makenek.cuda.titan
 $ ./nekpgpu.titan data 1 1
-
+```
 
 ### References
 ```
