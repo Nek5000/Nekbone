@@ -7,6 +7,8 @@
 SOURCE_ROOT="../../src"
 
 # Fortran compiler
+# To compile properly with ftn on Theta: makenek.inc has
+# to be set with *ftn*) P="-r8 -fpconstant -fpp -fixed" 
 F77="ftn  -align array64byte -xMIC-AVX512 -shared-intel "
  
 # C compiler
