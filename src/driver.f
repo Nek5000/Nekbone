@@ -150,7 +150,8 @@ c--------------------------------------------------------------
       real f(n),c(n)
 
       do i=1,n
-         arg  = 1.e9*(i*i)
+         arg  = mod(i,1000)
+         arg  = 1.e9*(arg*arg)
          arg  = 1.e9*cos(arg)
          f(i) = sin(arg)
       enddo
@@ -601,7 +602,8 @@ c--------------------------------------------------------------
 !$ACC DATA PRESENT(f,c)
 !$ACC PARALLEL LOOP
       do i=1,n
-         arg  = 1.e9*(i*i)
+         arg  = mod(i,1000)
+         arg  = 1.e9*(arg*arg)
          arg  = 1.e9*cos(arg)
          f(i) = sin(arg)
       enddo

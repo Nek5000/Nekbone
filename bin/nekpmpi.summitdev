@@ -40,5 +40,5 @@ echo " mpirun -np $CORECOUNT --map-by node ./nekbone ">> $bsubfile
 
 bsub < $bsubfile
 rm $bsubfile
-echo "job submitted on OLCF Summitdev, #GPUs=$CORECOUNT, #Summitdev_cores_per_node=$3"
+echo "job submitted on OLCF Summitdev, #CPUs=$CORECOUNT"
 
