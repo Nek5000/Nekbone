@@ -149,10 +149,11 @@ c--------------------------------------------------------------
       subroutine set_f(f,c,n)
       real f(n),c(n)
 
+c     act as random number generator 
       do i=1,n
-         arg  = mod(i,1000)
-         arg  = 1.e9*(arg*arg)
-         arg  = 1.e9*cos(arg)
+c        arg  = 1.e9*(i*i) ! trouble  w/ certain compilers
+         arg  = (i*i)
+         arg  = cos(arg)
          f(i) = sin(arg)
       enddo
 
@@ -602,9 +603,8 @@ c--------------------------------------------------------------
 !$ACC DATA PRESENT(f,c)
 !$ACC PARALLEL LOOP
       do i=1,n
-         arg  = mod(i,1000)
-         arg  = 1.e9*(arg*arg)
-         arg  = 1.e9*cos(arg)
+         arg  = i*i
+         arg  = cos(arg)
          f(i) = sin(arg)
       enddo
       call dssum_acc(f)
