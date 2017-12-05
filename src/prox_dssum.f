@@ -5,13 +5,12 @@ c-----------------------------------------------------------------------
       real f(1)
 
 c     call nekgsync()
-      call adelay
       call gs_op(gsh,f,1,1,0)  ! Gather-scatter operation  ! w   = QQ  w
 
       return
       end
 c-----------------------------------------------------------------------
-      subroutine proxy_setupds(gs_handle,nx)
+      subroutine proxy_setupds(gs_handle)
       include 'SIZE'
       include 'INPUT'
       include 'PARALLEL'
@@ -23,23 +22,21 @@ c-----------------------------------------------------------------------
 
       t0 = dnekclock()
 
-      call set_vert_box(glo_num,nx) ! Set global-to-local map
-c     call outmat_glo_num(glo_num,nx)
-    
+      call set_vert_box(glo_num) ! Set global-to-local map
 
-      ntot      = nx*nx*nx*nelt   ! assumes nx=ny=nz
+      ntot      = nx1*ny1*nz1*nelt
       call gs_setup(gs_handle,glo_num,ntot,nekcomm,mp) ! Initialize gather-scatter
       dof = ntot *mp
       t1 = dnekclock() - t0
-c     if (nid.eq.0) then
-c        write(6,1) t1,gs_handle,nx,dof
-c   1    format('   setupds time',1pe11.4,' seconds ',2i3,i12)
-c     endif
+      if (nid.eq.0) then
+         write(6,1) t1,gs_handle,nx1,dof
+    1    format('   setupds time',1pe11.4,' seconds ',2i3,i12)
+      endif
 
       return
       end
 c-----------------------------------------------------------------------
-      subroutine set_vert_box(glo_num,nx)
+      subroutine set_vert_box(glo_num)
 
 c     Set up global numbering for elements in a box
 
@@ -50,7 +47,7 @@ c     Set up global numbering for elements in a box
 
       integer e,ex,ey,ez,eg
 
-      nn = nx-1  ! nn := polynomial order
+      nn = nx1-1  ! nn := polynomial order
 
       do e=1,nelt
         eg = lglel(e)                              
@@ -62,7 +59,7 @@ c     Set up global numbering for elements in a box
            jg = nn*(ey-1) + j                     
            ig = nn*(ex-1) + i
            ii = 1 + ig + jg*(nn*nelx+1) + kg*(nn*nelx+1)*(nn*nely+1) 
-           ll = 1 + i + nx*j + nx*nx*k + nx*nx*nx*(e-1)
+           ll = 1 + i + nx1*j + nx1*ny1*k + nx1*ny1*nz1*(e-1)
            glo_num(ll) = ii
         enddo
         enddo
@@ -85,7 +82,7 @@ c-----------------------------------------------------------------------
       return
       end
 c-----------------------------------------------------------------------
-      subroutine outmat_glo_num(glo_num,nx)
+      subroutine outmat_glo_num(glo_num)
       include 'SIZE'
       include 'INPUT'
       include 'PARALLEL'
@@ -95,13 +92,13 @@ c-----------------------------------------------------------------------
       integer e
 
       do e=1,nelt
-         call outmat_e_i8(glo_num(1,e),e,nx)
+         call outmat_e_i8(glo_num(1,e),e)
       enddo
  
       return
       end
 c-----------------------------------------------------------------------
-      subroutine outmat_e_i8(gn,e,nx)
+      subroutine outmat_e_i8(gn,e)
       include 'SIZE'
       include 'INPUT'
       include 'PARALLEL'
@@ -117,44 +114,13 @@ c-----------------------------------------------------------------------
       do k0=3,1,-2
 
          k1=k0+1
-            write(6,*) k0,k1
-         do j=nx,1,-1
-            write(6,1) ((gn(i,j,k),i=1,nx),k=k0,k1)
+         do j=ny1,1,-1
+            write(6,1) ((gn(i,j,k),i=1,4),k=k0,k1)
          enddo
          write(6,*)
 
       enddo
-    1 format('gn:',4i5,3x,4i5)
-    2 format('gn: element: ',i4)
- 
-      return
-      end
-c-----------------------------------------------------------------------
-      subroutine outmat_glo_num_general(glo_num,nx)
-      include 'SIZE'
-      include 'INPUT'
-      include 'PARALLEL'
-
-      integer*8 glo_num(1)
-
-      integer e
-
-      io = 0
-      do e=1,nelt
-         write(6,*)
-         write(6,2) e
-         write(6,*)
-
-         do k=nx,1,-1
-              write(6,*) 'k = ',k
-            do j=nx,1,-1
-                write(6,1) (glo_num(igo),igo=1+io,io+nx)
-                io = io+nx
-            enddo
-         enddo
-
-      enddo
-    1 format('gn:',6i5)
+    1 format('gn: ',4i8,3x,4i8)
     2 format('gn: element: ',i4)
  
       return

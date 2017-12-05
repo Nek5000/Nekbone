@@ -1003,10 +1003,13 @@ cc MPI_WTIME returns the elapsed wall clock time.
 c
       implicit none
 
-      real*8 mpi_wtime
-      real*4 a
-      call cpu_time(a)
-      mpi_wtime = a
+      real*8  mpi_wtime
+      real*8 a
+      integer*8 countval, countrate, countmax
+
+      call system_clock(countval, countrate, countmax)
+      a = countval
+      mpi_wtime = a/countrate
 
       return
       end

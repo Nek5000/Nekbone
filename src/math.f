@@ -141,6 +141,7 @@ c-----------------------------------------------------------------------
 c-----------------------------------------------------------------------
       subroutine rzero(a,n)
       DIMENSION  A(1)
+
       DO 100 I = 1, N
  100     A(I ) = 0.0
       return
@@ -648,6 +649,22 @@ c
       glsc23 = tmp
       return
       end
+c-----------------------------------------------------------------------
+c     real function gl2norm(a,n)
+
+c     include 'SIZE'
+c     include 'MASS'
+
+c     real a(1)
+
+c     common /scrsf/ w1 (lx1,ly1,lz1,lelt)
+
+c     call col3 (w1,a,a,n)
+c     call col2 (w1,bm1,n)
+c     gl2norm = sqrt(glsum (w1,n)/volvm1)
+
+c     return
+c     end
 c-----------------------------------------------------------------------
       function glsum (x,n)
       DIMENSION X(1)

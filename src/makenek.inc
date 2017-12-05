@@ -7,22 +7,26 @@ echo "makenek - automatic build tool for Nek5000"
 
 if [ "$PPLIST" == "?" ]; then
   echo "available pre-processor symbols:" 
-  echo "  BG        enable Blue Gene optimizations (BG/L and BG/P)"
+  echo "  BGP       enable Blue Gene/P optimizations "
+  echo "  BGQ       compile for Blue Gene/Q "
   echo "  K10_MXM   use optimized MxM kernel for AMD Family 10h processors" 
-  echo "  NEKCOMM  nekbone communication test"
-  echo "  NEKDLAY  nekbone load imbalance simmulation"
-  echo "  MGRID    turns on Multigrid precondition"
+  echo "  TIMERS    turns on detailed routine timers"
+  echo "  MPITIMER  use MPI_Wtime for timing"
+  echo "  BGQTIMER  use BG/Q cycle counter for timing"
+  echo "  CGTTIMER  use clock_gettime for timing"
+  echo "  NITER=x   number of cg iterations, default 100"
+  echo "  LOG       output progress"
   exit 1
 fi
 
 
-if [ "$1" = "clean" ]; then
+if [ "$1" == "clean" ]; then
   make clean
   exit 0
 fi
 
 NOCOMPILE=0
-if [ "$2" == "-nocompile" ]; then
+if [ "$1" == "-nocompile" ]; then
   NOCOMPILE=1
 fi 
 
@@ -30,10 +34,6 @@ CASENAME=$1
 CASEDIR=`pwd`
 APATH_SRC=`cd $SOURCE_ROOT; pwd`
 SOURCE_ROOT=$APATH_SRC
-
-NEKCOMM=false
-NEKDELAY=false
-MGRID=false
 
 # do some basic checks
 if [ "$CASEDIR" == "$SOURCE_ROOT" ]; then
@@ -46,8 +46,8 @@ if [ ! -f SIZE ]; then
    exit 1
 fi
 
-if [ ! -f $SOURCE_ROOT/makefile.template ]; then
-  echo "FATAL ERROR: Cannot find  $SOURCE_ROOT/makefile.template!"
+if [ ! -f ./makefile.template ]; then
+  echo "FATAL ERROR: Cannot find ./makefile.template!"
   exit 1
 fi
 
@@ -58,6 +58,7 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 \rm test_f77.o 2>/dev/null
+
 # basic compiler test
 cat > test_f77.f << _ACEOF
       subroutine test
@@ -77,6 +78,7 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 \rm test_cc.o 2>/dev/null
+
 cat > test_cc.c << _ACEOF
       void function(){}
 _ACEOF
@@ -89,23 +91,6 @@ fi
 
 # initial clean-up
 rm -f nekbone 2>/dev/null
-
-# Check ptr size
-cat > tmp.c << _ACEOF
-#include <stdlib.h>
-#include <stdio.h>
-int main()
-{
-  int *p;printf("%li\n",sizeof(p));
-}
-_ACEOF
-$CC tmp.c 2>&1>/dev/null
-ptrSize=`./a.out`
-rm tmp.c a.out
-if [ "$ptrSize" == "8" ]
-then
-  PPLIST="${PPLIST} PTRSIZE8"
-fi
 
 # Check if the compiler adds an underscore to external functions
 UNDERSCORE=false
@@ -122,41 +107,52 @@ then
 fi
 \rm test_underscore.* 2>/dev/null
 
-F77comp=$F77
-# mpi-wrappers?
-echo $F77comp | grep -i mp >/dev/null
-if [ $? -eq 0 ]; then   
-# trying to figure out which compiler we're using 
-  F77ok=0
-  F77comp_=`$F77 -showme 2>/dev/null 1>.tmp` 
-  F77comp=`cat .tmp | awk '{print $1}' | awk -F/ '{print $NF}'`
+# trying to figure which compiler the wrapper is using
+F77ok=0
+
+F77comp_=`$F77 -showme 2>/dev/null 1>.tmp || true`
+F77comp=`cat .tmp | awk '{print $1}' | awk -F/ '{print $NF}' || true`
+if [ -f "`which $F77comp 2>/dev/null`" ]; then
+  F77ok=1
+fi
+
+if [ $F77ok -eq 0 ]; then
+  F77comp_=`$F77 -show 2>/dev/null 1>.tmp || true`
+  F77comp=`cat .tmp | awk '{print $1}' | awk -F/ '{print $NF}' || true`
   if [ -f "`which $F77comp 2>/dev/null`" ]; then
     F77ok=1
-  else
-    F77comp_=`$F77 -show 2>/dev/null 1>.tmp`
-    F77comp=`cat .tmp | awk '{print $1}' | awk -F/ '{print $NF}'`
-    if [ -f "`which $F77comp 2>/dev/null`" ]; then
-      F77ok=1
-    fi
   fi
-else
+fi
+
+if [ $F77ok -eq 0 ]; then
+  F77comp_=`$F77 -craype-verbose 2>/dev/null 1>.tmp || true`
+  F77comp=`cat .tmp | awk '{print $1}' | awk -F/ '{print $NF}' || true`
+  if [ -f "`which $F77comp 2>/dev/null`" ]; then
+    F77ok=1
+  fi
+fi
+
+if [ $F77ok -eq 0 ]; then
   F77comp=`echo $F77 | awk '{print $1}'`
   if [ -f "`which $F77comp 2>/dev/null`" ]; then
     F77ok=1
   fi
 fi
+
 \rm -f .tmp
 if [ $F77ok -eq 0 ]; then
   F77comp="unknown"
 fi
 
+CFE_FLAG=""
 # assign F77 compiler specific flags
 case $F77comp in
   *pgf*)        P="-r8 -Mpreprocess"
                ;;
-  *gfortran*)   P="-fdefault-real-8 -x f77-cpp-input"
+  *gfortran*)   P="-fcray-pointer -fdefault-real-8 -x f77-cpp-input"
                ;;
   *ifort*)      P="-r8 -fpconstant -fpp"
+                CFE_FLAG="-xHost"
                ;;
   *pathf*)      P="-r8 -cpp -fno-second-underscore"
                ;;
@@ -181,6 +177,23 @@ case $F77comp in
 esac
 export PPPO
 
+# Check ptr size
+cat > tmp.c << _ACEOF
+#include <stdlib.h>
+#include <stdio.h>
+int main()
+{
+  int *p;printf("%li\n",sizeof(p));
+}
+_ACEOF
+$CC $CFE_FLAG tmp.c 2>&1>/dev/null
+ptrSize=`./a.out`
+rm tmp.c a.out
+if [ "$ptrSize" == "8" ]
+then
+  PPLIST="${PPLIST} PTRSIZE8"
+fi
+
 # set preprocessor symbols
 if [ "$IFMPI" == "false" -o "$IFMPI" == "no" ]; then
   IFMPI=false
@@ -202,7 +215,7 @@ int main()
   printf("%i\n",i);
 }
 _ACEOF
-$CC tmp.c 2>&1>/dev/null
+$CC $CFE_FLAG tmp.c 2>&1>/dev/null
 longIntTest=`./a.out`
 rm tmp.c a.out
 if [ "$longIntTest" == "8" ]
@@ -217,7 +230,7 @@ fi
 PPLIST="${PPLIST} GLOBAL_LONG_LONG"
 
 MXM_USER="mxm_std.o blas.o"
-echo $PPLIST | grep 'BG' >/dev/null 
+echo $PPLIST | grep 'BGP' >/dev/null 
 if [ $? -eq 0 ]; then
    MXM_USER="mxm_std.o bg_aligned3.o bg_mxm44.o bg_mxm44_uneven.o bg_mxm3.o blas.o" 
    OPT_FLAGS_STD="-qarch=450 -qtune=450"
@@ -227,18 +240,6 @@ echo $PPLIST | grep 'BLAS_MXM' >/dev/null
 if [ $? -eq 0 ]; then
    MXM_USER="mxm_std.o" 
 fi
-for i in $PPLIST
-do
-if [ "$i" == "NEKCOMM" ]; then
-     IFNEKCOMM=true
-fi
-if [ "$i" == "NEKDLAY" ]; then
-     IFNEKDLAY=true
-fi
-if [ "$i" == "MGRID" ]; then
-     IFMGRID=true
-fi
-done
 
 # set optimization flags
 L0="\$(G) -O0"
@@ -281,14 +282,11 @@ sed -e "s:^F77[ ]*=.*:F77\:=$F77:" \
 -e "s/^L4[ ]*=.*/L4=$L4/" \
 -e "s/^PPPO[ ]*=.*/PPPO=$PPPO/" \
 -e "s/^PPS[ ]*=.*/PPS=$PPLIST/" \
--e "s/^IFNEKCOMM[ ]*=.*/IFNEKCOMM:=$IFNEKCOMM/" \
--e "s/^IFNEKDLAY[ ]*=.*/IFNEKDLAY:=$IFNEKDLAY/" \
--e "s/^IFMGRID[ ]*=.*/IFMGRID:=$IFMGRID/" \
--e "s/^IFMPI[ ]*=.*/IFMPI:=$IFMPI/" \
 -e "s:^MXM[ ]*=.*:MXM=$MXM_USER:" \
+-e "s/^IFMPI[ ]*=.*/IFMPI:=$IFMPI/" \
 -e "s:^USR[ ]*=.*:USR\:=$USR:" \
 -e "s:^USR_LFLAGS[ ]*=.*:USR_LFLAGS\:=$USR_LFLAGS:" \
--e "s:^S[ ]*=.*:S\:=${SOURCE_ROOT}:"  $SOURCE_ROOT/makefile.template >.makefile
+-e "s:^S[ ]*=.*:S\:=${SOURCE_ROOT}:" ./makefile.template >.makefile
 
 echo $G | grep '\-g' 1>/dev/null
 if [ $? -eq 0 ]; then

@@ -5,7 +5,7 @@ c-----------------------------------------------------------------------
       include 'TOTAL'
 
       real a(lx1*lx1),b(lx1),c(lx1*lx1),d(lx1*lx1),z(lx1)
-     $               , w(lx1*2),g(6,nx1*ny1*nz1*nelt)
+     $               , w(lx1*2),g(6,lx1*ly1*lz1*lelt)
 
       call semhat(a,b,c,d,z,w,nx1-1)
 
@@ -94,9 +94,17 @@ c
 c-----------------------------------------------------------------------
       function randx(seed)
 
+#ifdef BGQ
+#define M_SIN(X) _sin((X))
+#define M_COS(X) _cos((X))
+#else
+#define M_SIN(X) sin((X))
+#define M_COS(X) cos((X))
+#endif
+
       arg   = 1.e9*seed
-      arg   = 1.e9*cos(arg)
-      randx = sin(arg)
+      arg   = 1.e9*M_COS(arg)
+      randx = M_SIN(arg)
       seed  = randx
       seed  = randx
 

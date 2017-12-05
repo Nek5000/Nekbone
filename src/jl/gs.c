@@ -8,6 +8,10 @@
 #include "fail.h"
 #include "types.h"
 
+#ifdef _OPENMP
+#include "omp.h"
+#endif
+
 #define gs_op gs_op_t   /* fix conflict with fortran */
 
 #include "gs_defs.h"
@@ -25,8 +29,6 @@
 #define gs_setup   PREFIXED_NAME(gs_setup )
 #define gs_free    PREFIXED_NAME(gs_free  )
 #define gs_unique  PREFIXED_NAME(gs_unique)
-
-
 
 GS_DEFINE_DOM_SIZES()
 
@@ -322,6 +324,135 @@ static void make_topology_unique(struct gs_topology *top, slong *id,
   }
 }
 
+
+/*------------------------------------------------------------------------------
+  Divide lists for parallel execution
+------------------------------------------------------------------------------*/
+
+void sublist(const uint *map, uint ***slPtr) {
+
+  // Iterate over array and count items and lists
+
+  uint i,j;
+  int itemCount = 0, listCount = 0;
+  const uint *lmap = map;
+  while((i=*lmap++)!=-(unsigned int)1) {
+    listCount++;
+  
+    j=*lmap++;
+    do {
+      itemCount++;
+    } while ((j=*lmap++)!=-(unsigned int)1);
+  }
+
+  // Determine number of threads and lists
+
+  int maxThreads = 1;
+#ifdef _OPENMP
+  maxThreads = omp_get_max_threads();
+#endif
+  int max = (maxThreads <= listCount) ? maxThreads : listCount;
+  if (max == 0) max = 1;
+
+  // Setup sublists
+
+  uint *subListData = tmalloc(uint, max+itemCount+2*listCount);
+  *slPtr = tmalloc(uint*, maxThreads);
+  uint **subListPtr = *slPtr;
+
+  subListData[0] = -(unsigned int)1;
+  subListPtr[0] = subListData;
+  int nextSubList = 1;
+
+  // Populate sublists
+
+  int copyItemCount = 0;
+  lmap = map;
+  while((i=*lmap++)!=-(unsigned int)1) {
+    *subListData++ = i;
+
+    j=*lmap++;
+    do {
+      *subListData++ = j;
+      copyItemCount++;
+    } while ((j=*lmap++)!=-(unsigned int)1);
+    *subListData++ = -(unsigned int) 1;
+  
+    if ( copyItemCount*max >= itemCount*nextSubList ) {
+      *subListData= -(unsigned int)1;
+  
+      if (copyItemCount != itemCount) {
+        subListData++;
+        subListPtr[nextSubList] = subListData;
+        nextSubList++;
+      }
+    }
+  }
+
+  // Terminate unused sublists
+
+  for (; nextSubList < maxThreads; nextSubList++) {
+    subListPtr[nextSubList] = subListData;
+  }
+
+  return;
+}
+
+void subflagged(const uint *map, uint ***slPtr) {
+
+  // Iterate over map and count items
+
+  int count = 0;
+  const uint *lmap = map;
+  while(*lmap++ !=-(unsigned int)1) count++;
+
+  // Determine number of threads and sublists
+
+  int maxThreads = 1;
+#ifdef _OPENMP
+  maxThreads = omp_get_max_threads();
+#endif
+  int maxLists = (maxThreads <= count) ? maxThreads : count;
+  if (maxLists == 0) maxLists = 1;
+
+  // Setup empty sublists
+
+  uint *subFlaggedData = tmalloc(uint, maxLists+count);
+  *slPtr = tmalloc(uint*, maxThreads);
+
+  subFlaggedData[0] = -(unsigned int)1;
+  (*slPtr)[0] = subFlaggedData;
+  int nextList = 1;
+
+  // Populate sublists
+
+  int copyCount=0;
+  uint i;
+  lmap = map;
+  while((i=*lmap++)!=-(unsigned int)1) {
+    *subFlaggedData++ = i;
+    copyCount++;
+  
+    if (copyCount*maxLists >= count*nextList) {
+      *subFlaggedData = -(unsigned int)1;
+      
+      if (copyCount != count) {
+        subFlaggedData++;
+        (*slPtr)[nextList] = subFlaggedData;
+        nextList++;
+      }
+    }
+  }
+
+  // Terminate unused sublists
+  
+  for (; nextList < maxThreads; nextList++) {
+    (*slPtr)[nextList] = subFlaggedData;
+  }
+
+  return;
+}
+
 /*------------------------------------------------------------------------------
   Local setup
 ------------------------------------------------------------------------------*/
@@ -396,6 +527,7 @@ struct pw_comm_data {
   uint *p;     /* message source/dest proc */
   uint *size;  /* size of message */
   uint total;  /* sum of message sizes */
+  size_t *offsets;
 };
 
 struct pw_data {
@@ -403,32 +535,51 @@ struct pw_data {
   const uint *map[2];
   comm_req *req;
   uint buffer_size;
+  uint **submap[2];
 };
 
 static char *pw_exec_recvs(char *buf, const unsigned unit_size,
                            const struct comm *comm,
                            const struct pw_comm_data *c, comm_req *req)
 {
-  const uint *p, *pe, *size=c->size;
-  for(p=c->p,pe=p+c->n;p!=pe;++p) {
-    size_t len = *(size++)*unit_size;
-    comm_irecv(req++,comm,buf,len,*p,*p);
-    buf += len;
+  const uint *p=c->p, *size=c->size;
+  int i;
+  char *retVal = buf;
+
+#ifdef MPITHREADS
+#pragma omp for
+#endif
+  for (i = 0; i < c->n; i++) {
+    comm_irecv(&(req[i]),comm,buf+c->offsets[i]*unit_size,size[i]*unit_size,p[i],p[i]);
   }
-  return buf;
+
+  if (c->n != 0) {
+   retVal += c->offsets[c->n-1]*unit_size + size[c->n-1]*unit_size;
+  }
+
+  return retVal;
 }
 
 static char *pw_exec_sends(char *buf, const unsigned unit_size,
                            const struct comm *comm,
                            const struct pw_comm_data *c, comm_req *req)
 {
-  const uint *p, *pe, *size=c->size;
-  for(p=c->p,pe=p+c->n;p!=pe;++p) {
-    size_t len = *(size++)*unit_size;
-    comm_isend(req++,comm,buf,len,*p,comm->id);
-    buf += len;
+  const uint *p=c->p, *size=c->size;
+  int i;
+  char *retVal = buf;
+
+#ifdef MPITHREADS
+#pragma omp for
+#endif
+  for(i = 0; i < c->n; i++) {
+    comm_isend(&(req[i]),comm,buf+c->offsets[i]*unit_size,size[i]*unit_size,p[i],comm->id);
   }
-  return buf;
+
+  if (c->n != 0) {
+   retVal += c->offsets[c->n-1]*unit_size + size[c->n-1]*unit_size;
+  }
+
+  return retVal;
 }
 
 static void pw_exec(
@@ -442,17 +593,65 @@ static void pw_exec(
     { &gs_gather, &gs_gather_vec, &gs_gather_vec_to_many, &gather_noop };
   const unsigned recv = 0^transpose, send = 1^transpose;
   unsigned unit_size = vn*gs_dom_size[dom];
+
+#ifdef MPITHREADS
   char *sendbuf;
-  /* post receives */
-  sendbuf = pw_exec_recvs(buf,unit_size,comm,&pwd->comm[recv],pwd->req);
-  /* fill send buffer */
-  scatter_to_buf[mode](sendbuf,data,vn,pwd->map[send],dom);
-  /* post sends */
-  pw_exec_sends(sendbuf,unit_size,comm,&pwd->comm[send],
-                &pwd->req[pwd->comm[recv].n]);
-  comm_wait(pwd->req,pwd->comm[0].n+pwd->comm[1].n);
-  /* gather using recv buffer */
-  gather_from_buf[mode](data,buf,vn,pwd->map[recv],dom,op);
+#else
+  static char *sendbuf;
+#endif
+
+  int thd = 0;
+  int inp = 0;
+  #ifdef _OPENMP
+    thd = omp_get_thread_num();
+    inp = omp_in_parallel();
+  #endif
+
+  if (inp) {
+    /* post receives */
+#ifndef MPITHREADS
+    #pragma omp master
+#endif
+    {
+      sendbuf = pw_exec_recvs(buf,unit_size,comm,&pwd->comm[recv],pwd->req);
+    }
+    #pragma omp barrier
+
+    /* fill send buffer */
+    scatter_to_buf[mode](sendbuf,data,vn,(pwd->submap[send])[thd],dom);
+    #pragma omp barrier
+
+    /* post sends */
+#ifndef MPITHREADS
+    #pragma omp master
+#endif
+    {
+      pw_exec_sends(sendbuf,unit_size,comm,&pwd->comm[send],
+                      &pwd->req[pwd->comm[recv].n]);
+    }
+    #pragma omp barrier
+
+    #pragma omp master 
+    {
+      comm_wait(pwd->req,pwd->comm[0].n+pwd->comm[1].n);
+    }
+    #pragma omp barrier
+
+    /* gather using recv buffer */
+    gather_from_buf[mode](data,buf,vn,(pwd->submap[recv])[thd],dom,op);
+  } else {
+    /* post receives */
+    sendbuf = pw_exec_recvs(buf,unit_size,comm,&pwd->comm[recv],pwd->req);
+    /* fill send buffer */
+    scatter_to_buf[mode](sendbuf,data,vn,pwd->map[send],dom);
+    /* post sends */
+    pw_exec_sends(sendbuf,unit_size,comm,&pwd->comm[send],
+                  &pwd->req[pwd->comm[recv].n]);
+    comm_wait(pwd->req,pwd->comm[0].n+pwd->comm[1].n);
+    /* gather using recv buffer */
+    gather_from_buf[mode](data,buf,vn,pwd->map[recv],dom,op);
+  }
+
 }
 
 /*------------------------------------------------------------------------------
@@ -486,9 +685,17 @@ static void pw_comm_setup(struct pw_comm_data *data, struct array *sh,
     ++count;
   }
   if(n!=0) data->size[n-1] = count;
+
+  data->offsets = malloc(sizeof(size_t)*data->n);
+  int i;
+  size_t len = 0;
+  for (i = 0; i < data->n; i++) {
+    data->offsets[i] = len;
+    len += data->size[i];
+  }
 }
 
-static void pw_comm_free(struct pw_comm_data *data) { free(data->p); }
+static void pw_comm_free(struct pw_comm_data *data) { free(data->p); free(data->offsets);}
 
 /* assumes that the bi field of sh is set */
 static const uint *pw_map_setup(struct array *sh, buffer *buf)
@@ -517,6 +724,7 @@ static const uint *pw_map_setup(struct array *sh, buffer *buf)
   return map;
 }
 
+
 static struct pw_data *pw_setup_aux(struct array *sh, buffer *buf)
 {
   struct pw_data *pwd = tmalloc(struct pw_data,1);
@@ -524,13 +732,16 @@ static struct pw_data *pw_setup_aux(struct array *sh, buffer *buf)
   /* default behavior: receive only remotely unflagged data */
   pw_comm_setup(&pwd->comm[0],sh, FLAGS_REMOTE, buf);
   pwd->map[0] = pw_map_setup(sh, buf);
+  sublist(pwd->map[0], &(pwd->submap[0]));
 
   /* default behavior: send only locally unflagged data */
   pw_comm_setup(&pwd->comm[1],sh, FLAGS_LOCAL, buf);
   pwd->map[1] = pw_map_setup(sh, buf);
-  
+  sublist(pwd->map[1], &(pwd->submap[1]));
+
   pwd->req = tmalloc(comm_req,pwd->comm[0].n+pwd->comm[1].n);
   pwd->buffer_size = pwd->comm[0].total + pwd->comm[1].total;
+
   return pwd;
 }
 
@@ -542,6 +753,11 @@ static void pw_free(struct pw_data *data)
   free((uint*)data->map[1]);
   free(data->req);
   free(data);
+
+  free((data->submap[0])[0]);
+  free(data->submap[0]);
+  free((data->submap[1])[0]);
+  free(data->submap[1]);
 }
 
 static void pw_setup(struct gs_remote *r, struct gs_topology *top,
@@ -1024,7 +1240,10 @@ struct gs_data {
   const uint *map_local[2]; /* 0=unflagged, 1=all */
   const uint *flagged_primaries;
   struct gs_remote r;
+  uint **submap_local[2]; /* 0=unflagged, 1=all */
+  uint **subflagged_primaries;
 };
+
 
 static void gs_aux(
   void *u, gs_mode mode, unsigned vn, gs_dom dom, gs_op op, unsigned transpose,
@@ -1036,12 +1255,42 @@ static void gs_aux(
     { &gs_gather,  &gs_gather_vec,  &gs_gather_many, &gather_noop  };
   static gs_init_fun *const init[] =
     { &gs_init, &gs_init_vec, &gs_init_many, &init_noop };
+
+
+  int thd = 0;
+  int inp = 0;
+  #ifdef _OPENMP
+    thd = omp_get_thread_num();
+    inp = omp_in_parallel();
+  #endif
+
   if(!buf) buf = &static_buffer;
-  buffer_reserve(buf,vn*gs_dom_size[dom]*gsh->r.buffer_size);
-  local_gather [mode](u,u,vn,gsh->map_local[0^transpose],dom,op);
-  if(transpose==0) init[mode](u,vn,gsh->flagged_primaries,dom,op);
-  gsh->r.exec(u,mode,vn,dom,op,transpose,gsh->r.data,&gsh->comm,buf->ptr);
-  local_scatter[mode](u,u,vn,gsh->map_local[1^transpose],dom);
+
+  #pragma omp single
+  {
+    buffer_reserve(buf,vn*gs_dom_size[dom]*gsh->r.buffer_size);
+  }
+
+  if (inp) {
+    local_gather [mode](u,u,vn,(gsh->submap_local[0^transpose])[thd],dom,op);
+    #pragma omp barrier
+
+    if(transpose==0) init[mode](u,vn,(gsh->subflagged_primaries)[thd],dom,op);
+    #pragma omp barrier
+
+    gsh->r.exec(u,mode,vn,dom,op,transpose,gsh->r.data,&gsh->comm,buf->ptr);
+    #pragma omp barrier
+
+    local_scatter[mode](u,u,vn,(gsh->submap_local[1^transpose])[thd],dom);
+    #pragma omp barrier
+
+  } else { 
+    local_gather [mode](u,u,vn,gsh->map_local[0^transpose],dom,op);
+    if(transpose==0) init[mode](u,vn,gsh->flagged_primaries,dom,op);
+    gsh->r.exec(u,mode,vn,dom,op,transpose,gsh->r.data,&gsh->comm,buf->ptr);
+    local_scatter[mode](u,u,vn,gsh->map_local[1^transpose],dom);
+  }
+
 }
 
 void gs(void *u, gs_dom dom, gs_op op, unsigned transpose,
@@ -1068,11 +1317,16 @@ void gs_many(void *const*u, unsigned vn, gs_dom dom, gs_op op,
 typedef enum { gs_pairwise, gs_crystal_router, gs_all_reduce,
                gs_auto } gs_method;
 
+
+
 static void local_setup(struct gs_data *gsh, const struct array *nz)
 {
   gsh->map_local[0] = local_map(nz,1);
   gsh->map_local[1] = local_map(nz,0);
   gsh->flagged_primaries = flagged_primaries_map(nz);
+  sublist(gsh->map_local[0], &(gsh->submap_local[0]));
+  sublist(gsh->map_local[1], &(gsh->submap_local[1]));
+  subflagged(gsh->flagged_primaries, &(gsh->subflagged_primaries));
 }
 
 static void gs_setup_aux(struct gs_data *gsh, const slong *id, uint n,
@@ -1115,6 +1369,12 @@ void gs_free(struct gs_data *gsh)
   free((uint*)gsh->map_local[0]), free((uint*)gsh->map_local[1]);
   free((uint*)gsh->flagged_primaries);
   gsh->r.fin(gsh->r.data);
+  free((gsh->submap_local[0])[0]);
+  free(gsh->submap_local[0]);
+  free((gsh->submap_local[1])[0]);
+  free(gsh->submap_local[1]);
+  free((gsh->subflagged_primaries)[0]);
+  free(gsh->subflagged_primaries);
   free(gsh);
 }
 
@@ -1165,7 +1425,7 @@ void fgs_setup(sint *handle, const slong id[], const sint *n,
                      fgs_info=trealloc(struct gs_data*,fgs_info,fgs_max);
   gsh=fgs_info[fgs_n]=tmalloc(struct gs_data,1);
   comm_init_check(&gsh->comm,*comm,*np);
-  gs_setup_aux(gsh,id,*n,0,gs_auto,1);
+  gs_setup_aux(gsh,id,*n,0,gs_pairwise,1);
   *handle = fgs_n++;
 }
 

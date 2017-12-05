@@ -57,4 +57,5 @@ c
 c
 c  timer
 c
-      double precision mpi_wtime
+      external mpi_wtime
+      real*8 mpi_wtime

@@ -1,6 +1,24 @@
+#ifdef TIMERS
+#define NBTIMER(a) a = dnekclock()
+#define STIMER(a) a = dnekclock_sync()
+#define ACCUMTIMER(b,a) b = b + (dnekclock()- a )
+#else
+#define NBTIMER(a)
+#define STIMER(a)
+#define ACCUMTIMER(a,b)
+#endif
+
+
 c-----------------------------------------------------------------------
       subroutine cg(x,f,g,c,r,w,p,z,n,niter,flop_cg)
+
+#if defined(XSMM_DISPATCH)
+      USE :: LIBXSMM
+#endif
+
       include 'SIZE'
+      include 'TIMER'
+
 
 c     Solve Ax=f where A is SPD and is invoked by ax()
 c
@@ -16,14 +34,18 @@ c     User-provided ax(w,z,n) returns  w := Az,
 c
 c     User-provided solveM(z,r,n) ) returns  z := M^-1 r,  
 c
-
-      common /mymask/cmask(-1:lx1*ly1*lz1*lelt)
       parameter (lt=lx1*ly1*lz1*lelt)
-      real ur(lt),us(lt),ut(lt),wk(lt)
+c     real ur(lt),us(lt),ut(lt)
+
+c     parameter (lxyz=lx1*ly1*lz1)
+c     real ur(lxyz),us(lxyz),ut(lxyz),wk(lxyz)
 
       real x(n),f(n),r(n),w(n),p(n),z(n),g(1),c(n)
+      real rnorminit, fbeta, fpap, falpha, frnorm
 
-      character*1 ans
+      integer thread, numth, find, lind, fel, lel
+      integer omp_get_thread_num, omp_get_num_threads
+      integer fiter, tmt
 
       pap = 0.0
 
@@ -34,92 +56,168 @@ c     set machine tolerances
       if (one+eps .eq. one) eps = 1.e-7
 
       rtz1=1.0
-
-      call rzero(x,n)
-      call copy (r,f,n)
-      call maskit (r,cmask,nx1,ny1,nz1) ! Zero out Dirichlet conditions
-
-      rnorm = sqrt(glsc3(r,c,r,n))
-      iter = 0
-      if (nid.eq.0)  write(6,6) iter,rnorm
-
       miter = niter
-c     call tester(z,r,n)  
+
+c$OMP PARALLEL DEFAULT(shared) PRIVATE(thread,numth,find,lind,iter,
+c$OMP&  fel,lel,rtz2,beta,alpha,alphm,rlim2,rtr0,tmt,ttemp1)
+
+      thread = 0
+      numth = 1
+#ifdef _OPENMP
+      thread = omp_get_thread_num()
+      numth = omp_get_num_threads()
+#endif
+      tmt = thread + 1
+
+      if (numth < nelt) then
+        fel = (thread*nelt)/numth + 1
+        lel = ((thread+1)*nelt)/numth
+      else
+        if (thread < nelt) then
+          fel = thread + 1
+          lel = fel
+        else
+          fel = nelt+1
+          lel = nelt
+        end if
+      end if
+
+      find = (fel-1) *(nx1*ny1*nz1)+1
+      lind = lel * (nx1*ny1*nz1)
+
+      NBTIMER(ttemp1)
+      call rzeroi(x,n,find,lind)
+      ACCUMTIMER(trzero(tmt), ttemp1)
+
+      NBTIMER(ttemp1)
+      call copyi(r,f,n,find,lind)
+      ACCUMTIMER(tcopy(tmt), ttemp1)
+
+      if (thread == 0) call mask (r)   ! Zero out Dirichlet conditions
+
+      gopi(tmt)=1
+      NBTIMER(ttemp1)
+      call glsc3i(rnorminit,r,c,r,n,find,lind)
+      ACCUMTIMER(tglsc3a(tmt), ttemp1)
+
+
       do iter=1,miter
-         call solveM(z,r,n)    ! preconditioner here
+#ifdef LOG
+         if ((nid.eq.0) .and. (thread.eq.0)) write(*,*) "iter = ", iter
+#endif
+         NBTIMER(ttemp1)
+         call solveMi(z,r,n,find,lind)    ! preconditioner here
+         ACCUMTIMER(tsolvem(tmt), ttemp1)
 
          rtz2=rtz1                                                       ! OPS
-         rtz1=glsc3(r,c,z,n)   ! parallel weighted inner product r^T C z ! 3n
+         gopi(tmt)=2
+         NBTIMER(ttemp1)
+         call glsc3i(rtz1,r,c,z,n,find,lind)
+         ACCUMTIMER(tglsc3b(tmt), ttemp1)
 
          beta = rtz1/rtz2
          if (iter.eq.1) beta=0.0
-         call add2s1(p,z,beta,n)                                         ! 2n
 
-         call ax(w,p,g,ur,us,ut,wk,n)                                    ! flopa
-         pap=glsc3(w,c,p,n)                                              ! 3n
+         NBTIMER(ttemp1)
+         call add2s1i(p,z,beta,n,find,lind)                              ! 2n
+         ACCUMTIMER(tadd2s1(tmt), ttemp1)
+
+         call axi(w,p,g,n,fel,lel,find,lind)                             ! flopa
+
+         gopi(tmt)=3
+         NBTIMER(ttemp1)
+         call glsc3i(pap, w,c,p,n,find,lind)                             ! 3n
+         ACCUMTIMER(tglsc3c(tmt), ttemp1)
 
          alpha=rtz1/pap
          alphm=-alpha
-         call add2s2(x,p,alpha,n)                                        ! 2n
-         call add2s2(r,w,alphm,n)                                        ! 2n
 
-         rtr = glsc3(r,c,r,n)                                            ! 3n
+         NBTIMER(ttemp1)
+         call add2s2i(x,p,alpha,n,find,lind)                             ! 2n
+         ACCUMTIMER(tadd2s2b(tmt), ttemp1)
+
+         NBTIMER(ttemp1)
+         call add2s2i(r,w,alphm,n,find,lind)                             ! 2n
+         ACCUMTIMER(tadd2s2c(tmt), ttemp1)
+
+         gopi(tmt)=4
+         NBTIMER(ttemp1)
+         call  glsc3i(rtr, r,c,r,n,find,lind)                            ! 3n
+         ACCUMTIMER(tglsc3d(tmt), ttemp1)
+
          if (iter.eq.1) rlim2 = rtr*eps**2
          if (iter.eq.1) rtr0  = rtr
          rnorm = sqrt(rtr)
-c        if (nid.eq.0.and.mod(iter,100).eq.0) 
-c    $      write(6,6) iter,rnorm,alpha,beta,pap
-    6    format('cg:',i4,1p4e12.4)
-c        if (rtr.le.rlim2) goto 1001
 
       enddo
 
- 1001 continue
+      if (thread == 0) then
+        fiter = iter
+        fbeta = beta
+        falpha= alpha
+        fpap  = pap
+        frnorm = rnorm
+      end if
 
-      if (nid.eq.0) write(6,6) iter,rnorm,alpha,beta,pap
+c$OMP END PARALLEL
 
-      flop_cg = flop_cg + iter*15.*n
+    6    format('cg:',i4,1p4e12.4)
+
+      if (nid.eq.0) then
+        write(6,6) 0,sqrt(rnorminit)
+        write(6,6) fiter,frnorm,falpha,fbeta,fpap
+      end if
+
+      flop_cg = flop_cg + (fiter-1)*15.0*n + 3.0*n
 
       return
       end
 c-----------------------------------------------------------------------
       subroutine solveM(z,r,n)
-      include 'INPUT'
       real z(n),r(n)
 
-      nn = n
-      call h1mg_solve(z,r,nn)
+      call copy(z,r,n)
 
       return
       end
 c-----------------------------------------------------------------------
-      subroutine ax(w,u,gxyz,ur,us,ut,wk,n) ! Matrix-vector product: w=A*u
+      subroutine axi(w,u,gxyz,n,fel,lel,find,lind) ! Matrix-vector product: w=A*u
 
       include 'SIZE'
       include 'TOTAL'
+      include 'TIMER'
 
+      parameter (lxyz=lx1*ly1*lz1)
       real w(nx1*ny1*nz1,nelt),u(nx1*ny1*nz1,nelt)
       real gxyz(2*ldim,nx1*ny1*nz1,nelt)
-
       parameter (lt=lx1*ly1*lz1*lelt)
-      real ur(lt),us(lt),ut(lt),wk(lt)
-      common /mymask/cmask(-1:lx1*ly1*lz1*lelt)
 
-      integer e
+      integer fel, lel, find, lind
+      integer e,thread, tmt, omp_get_thread_num
 
+      thread = 0
+#ifdef _OPENMP
+      thread = omp_get_thread_num()
+#endif
+      tmt = thread + 1
 
-      do e=1,nelt                                ! ~
-         call ax_e( w(1,e),u(1,e),gxyz(1,1,e)    ! w   = A  u
-     $                             ,ur,us,ut,wk) !  L     L  L
-      enddo                                      ! 
+      do e= fel, lel
+         call ax_e( w(1,e),u(1,e),gxyz(1,1,e))
+      enddo
 
-      call dssum(w)         ! Gather-scatter operation  ! w   = QQ  w
+      NBTIMER(ttemp2)
+      call gs_op(gsh,w,1,1,0)  ! Gather-scatter operation  ! w   = QQ  w
+      ACCUMTIMER(tgsop(tmt),ttemp2)
                                                            !            L
-      call add2s2(w,u,.1,n)   !2n
-      call maskit(w,cmask,nx1,ny1,nz1)  ! Zero out Dirichlet conditions
+      NBTIMER(ttemp2)
+      call add2s2i(w,u,.1,n,find,lind)
+      ACCUMTIMER(tadd2s2a(tmt),ttemp2)
 
-      nxyz=nx1*ny1*nz1
-      flop_a = flop_a + (19*nxyz+12*nx1*nxyz)*nelt
+      if (find == 1) then
+        call mask(w)             ! Zero out Dirichlet conditions
+        nxyz=nx1*ny1*nz1
+        flop_a = flop_a + (19*nxyz+12*nx1*nxyz)*nelt
+      end if
 
       return
       end
@@ -139,20 +237,31 @@ c-------------------------------------------------------------------------
       return
       end
 c-------------------------------------------------------------------------
-      subroutine ax_e(w,u,g,ur,us,ut,wk) ! Local matrix-vector product
+      subroutine ax_e(w,u,g) ! Local matrix-vector product
+
       include 'SIZE'
       include 'TOTAL'
+      include 'TIMER'
 
       parameter (lxyz=lx1*ly1*lz1)
-      real ur(lxyz),us(lxyz),ut(lxyz),wk(lxyz)
-      real w(nx1*ny1*nz1),u(nx1*ny1*nz1),g(2*ldim,nx1*ny1*nz1)
+      real w(lxyz),u(lxyz),g(2*ldim,lxyz)
+      real ur(nx1*ny1*nz1),us(nx1*ny1*nz1),ut(nx1*ny1*nz1)
+      integer thread, tmt, omp_get_thread_num
 
+      thread = 0
+#ifdef _OPENMP
+      thread = omp_get_thread_num()
+#endif
+      tmt = thread + 1
 
       nxyz = nx1*ny1*nz1
       n    = nx1-1
 
+      NBTIMER(ttemp3)
       call local_grad3(ur,us,ut,u,n,dxm1,dxtm1)
+      ACCUMTIMER(tlocalgrad3(tmt),ttemp3)
 
+      NBTIMER(ttemp3)
       do i=1,nxyz
          wr = g(1,i)*ur(i) + g(2,i)*us(i) + g(3,i)*ut(i)
          ws = g(2,i)*ur(i) + g(4,i)*us(i) + g(5,i)*ut(i)
@@ -161,8 +270,11 @@ c-------------------------------------------------------------------------
          us(i) = ws
          ut(i) = wt
       enddo
+      ACCUMTIMER(twrwswt(tmt),ttemp3)
 
-      call local_grad3_t(w,ur,us,ut,n,dxm1,dxtm1,wk)
+      NBTIMER(ttemp3)
+      call local_grad3_t(w,ur,us,ut,n,dxm1,dxtm1)
+      ACCUMTIMER(tlocalgrad3t(tmt),ttemp3)
 
       return
       end
@@ -186,7 +298,7 @@ c     Output: ur,us,ut         Input:u,n,D,Dt
       return
       end
 c-----------------------------------------------------------------------
-      subroutine local_grad3_t(u,ur,us,ut,N,D,Dt,w)
+      subroutine local_grad3_t(u,ur,us,ut,N,D,Dt)
 c     Output: ur,us,ut         Input:u,N,D,Dt
       real u (0:N,0:N,0:N)
       real ur(0:N,0:N,0:N),us(0:N,0:N,0:N),ut(0:N,0:N,0:N)
@@ -211,158 +323,11 @@ c     Output: ur,us,ut         Input:u,N,D,Dt
       return
       end
 c-----------------------------------------------------------------------
-      subroutine maskit(w,pmask,nx,ny,nz)   ! Zero out Dirichlet conditions
-      include 'SIZE'
-      include 'PARALLEL'
-
-      real pmask(-1:lx1*ly1*lz1*lelt)
-      real w(1)
-      integer e
-
-      nxyz = nx*ny*nz
-      nxy  = nx*ny
-      if(pmask(-1).lt.0) then
-        j=pmask(0)
-        do i = 1,j
-           k = pmask(i)
-           w(k)=0.0
-        enddo
-      else
-c         Zero out Dirichlet boundaries.
-c
-c                      +------+     ^ Y
-c                     /   3  /|     |
-c               4--> /      / |     |
-c                   +------+ 2 +    +----> X
-c                   |   5  |  /    /
-c                   |      | /    /
-c                   +------+     Z   
-c
-
-        nn = 0
-        do e  = 1,nelt
-          call get_face(w,nx,e)
-          do i = 1,nxyz
-             if(w(i).eq.0) then
-               nn=nn+1
-               pmask(nn)=i
-             endif
-          enddo
-        enddo     
-        pmask(-1) = -1.
-        pmask(0) = nn
-      endif
-
-
-      return
-      end
-c-----------------------------------------------------------------------
-      subroutine masko(w)   ! Old 'mask'
+      subroutine mask(w)   ! Zero out Dirichlet conditions
       include 'SIZE'
       real w(1)
 
       if (nid.eq.0) w(1) = 0.  ! suitable for solvability
-
-      return
-      end
-c-----------------------------------------------------------------------
-      subroutine masking(w,nx,e,x0,x1,y0,y1,z0,z1)
-c     Zeros out boundary
-      include 'SIZE'
-      integer e,x0,x1,y0,y1,z0,z1
-      real w(nx,nx,nx,nelt)
-      
-c       write(6,*) x0,x1,y0,y1,z0,z1
-      do k=z0,z1
-      do j=y0,y1
-      do i=x0,x1
-          w(i,j,k,e)=0.0
-      enddo
-      enddo
-      enddo
-      return
-      end
-c-----------------------------------------------------------------------
-      subroutine tester(z,r,n)
-c     Used to test if solution to precond. is SPD
-      real r(n),z(n)
-
-      do j=1,n
-         call rzero(r,n)
-         r(j) = 1.0
-         call solveM(z,r,n)
-         do i=1,n
-            write(79,*) z(i)
-         enddo
-      enddo
-      call exitt0
-      return
-      end
-c-----------------------------------------------------------------------
-      subroutine get_face(w,nx,ie)
-c     zero out all boundaries as Dirichlet
-c     to change, change this routine to only zero out 
-c     the nodes desired to be Dirichlet, and leave others alone.
-      include 'SIZE'
-      include 'PARALLEL'
-      real w(1)
-      integer nx,ie,nelx,nely,nelz
-      integer x0,x1,y0,y1,z0,z1
-      
-      x0=1
-      y0=1
-      z0=1
-      x1=nx
-      y1=nx
-      z1=nx
-      
-      nelxy=nelx*nely
-      ngl = lglel(ie)        !global element number
-
-      ir = 1+(ngl-1)/nelxy   !global z-count
-      iq = mod1(ngl,nelxy)   !global y-count
-      iq = 1+(iq-1)/nelx     
-      ip = mod1(ngl,nelx)    !global x-count
-
-c     write(6,1) ip,iq,ir,nelx,nely,nelz, nelt,' test it'
-c  1  format(7i7,a8)
-
-      if(mod(ip,nelx).eq.1.or.nelx.eq.1)   then  ! Face4
-         x0=1
-         x1=1
-         call masking(w,nx,ie,x0,x1,y0,y1,z0,z1)
-      endif
-      if(mod(ip,nelx).eq.0)               then   ! Face2
-         x0=nx
-         x1=nx
-         call masking(w,nx,ie,x0,x1,y0,y1,z0,z1)
-      endif
-
-      x0=1
-      x1=nx
-      if(mod(iq,nely).eq.1.or.nely.eq.1) then    ! Face1
-         y0=1
-         y1=1
-         call masking(w,nx,ie,x0,x1,y0,y1,z0,z1)
-      endif
-      if(mod(iq,nely).eq.0)              then    ! Face3
-         y0=nx
-         y1=nx
-         call masking(w,nx,ie,x0,x1,y0,y1,z0,z1)
-      endif
-
-      y0=1
-      y1=nx
-      if(mod(ir,nelz).eq.1.or.nelz.eq.1) then    ! Face5
-         z0=1
-         z1=1
-         call masking(w,nx,ie,x0,x1,y0,y1,z0,z1)
-      endif
-      if(mod(ir,nelz).eq.0)              then    ! Face6
-         z1=nx
-         z0=nx
-         call masking(w,nx,ie,x0,x1,y0,y1,z0,z1)
-      endif
 
       return
       end
