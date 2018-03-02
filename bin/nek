@@ -6,7 +6,7 @@ DBG=
 # Correct format for qsub
 # REQ_WALLTIME="00:30:00"
 # Correct format for bsub
-REQ_WALLTIME="10"
+REQ_WALLTIME="20"
 PROJECT="CSC262"
 
 if [ $2 -gt 1024 ]; then

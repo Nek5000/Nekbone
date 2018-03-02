@@ -67,7 +67,7 @@ c     call tester(z,r,n)
          if (iter.eq.1) rtr0  = rtr
          rnorm = sqrt(rtr)
 c        if (nid.eq.0.and.mod(iter,100).eq.0) 
-c     $        write(6,6) iter,rnorm,alpha,beta,pap
+c     $   write(6,6) iter,rnorm,alpha,beta,pap
 
     6    format('cg:',i4,1p4e12.4)
 c        if (rtr.le.rlim2) goto 1001
@@ -602,10 +602,9 @@ c     call tester(z,r,n)
          if (iter.eq.1) rlim2 = rtr*eps**2
          if (iter.eq.1) rtr0  = rtr
          rnorm = sqrt(rtr)
-C        if (nid.eq.0.and.mod(iter,100).eq.0) 
-C    $      write(6,6) iter,rnorm,alpha,beta,pap
-        if (nid.eq.0.) 
-     $        write(6,6) iter,rnorm,alpha,beta,pap
+
+c        if (nid.eq.0.and.mod(iter,100).eq.0) 
+c     $   write(6,6) iter,rnorm,alpha,beta,pap
 
     6    format('cg:',i4,1p4e12.4)
 c        if (rtr.le.rlim2) goto 1001
