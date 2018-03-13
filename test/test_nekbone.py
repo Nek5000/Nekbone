@@ -1,6 +1,8 @@
 import os, stat, sys, unittest
 from subprocess import check_call, STDOUT
 
+testRoot = os.path.dirname(os.path.abspath(__file__))
+
 makenekTemplate = \
 """#!/bin/bash
 # Nek5000 build config file
@@ -60,7 +62,7 @@ exit 0
 """
 
 
-class NekboneTestCase(unittest.TestCase):
+class NekboneTestCase():
     testDir = None
 
     @staticmethod
@@ -164,21 +166,25 @@ class NekboneTestCase(unittest.TestCase):
         self.assertOutputEqual(testMode=testMode, refMode='serial')
 
 
-class NekboneGpu1(NekboneTestCase):
-    testDir = os.path.join(os.getcwd(), 'nek_gpu1')
+class NekboneGpu1(NekboneTestCase, unittest.TestCase):
+    testDir = os.path.join(testRoot, 'nek_gpu1')
 
 
-class NekboneExample1(NekboneTestCase):
-    testDir = os.path.join(os.getcwd(), 'example1')
+class NekboneExample1(NekboneTestCase, unittest.TestCase):
+    testDir = os.path.join(testRoot, 'example1')
 
 
-class NekboneExample2(NekboneTestCase):
-    testDir = os.path.join(os.getcwd(), 'example2')
+class NekboneExample2(NekboneTestCase, unittest.TestCase):
+    testDir = os.path.join(testRoot, 'example2')
 
 
-class NekboneExample3(NekboneTestCase):
-    testDir = os.path.join(os.getcwd(), 'example3')
+class NekboneExample3(NekboneTestCase, unittest.TestCase):
+    testDir = os.path.join(testRoot, 'example3')
 
 
 #class NekboneMgrid(NekboneTestCase):
-#    testDir = os.path.join(os.getcwd(), 'nek_mgrid')
+#    testDir = os.path.join(testRoot, 'nek_mgrid')
+
+
+if __name__ == '__main__':
+    unittest.main()
