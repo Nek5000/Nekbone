@@ -5,7 +5,7 @@
 #define PREC_BITS 256
 #define DIGITS 50
 
-#define GLL_LAG_FIX_MAX 16
+#define GLL_LAG_FIX_MAX 24
 
 #if 1
 #  define STATIC "static "
@@ -107,9 +107,8 @@ static void print_gll_lag_fix(int n)
     }
     puts("\n};\n");
   }
-  printf(STATIC "void gll_lag_%02d(double *restrict p, double *restrict data,\n"
+  printf(STATIC "void gll_lag_%02d(double *restrict p, double *restrict w,\n"
            "                       unsigned n, int d, double xh)\n{\n",n);
-  printf("  const double *restrict w = data;\n");
   printf("  const double x = xh*2;\n");
   #define PRINT_D(i) do { \
     printf("d%02d=x",i); \
